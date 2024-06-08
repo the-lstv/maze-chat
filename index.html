@@ -1,0 +1,189 @@
+<head>
+
+    @manifest {
+        title: "Chat";
+        accent: "blue";
+        style: "flat";
+        theme: "dark";
+        favicon: /logo.svg;
+    }
+
+    @resources {
+        js: /js/client.js, /js/ui.js, /js/app.js, https://cdn.jsdelivr.net/npm/vscroll, https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js;
+        css: /css/main.css, /css/format.css;
+
+        ls-js: tiny, select, color,tabs, drag, steps, form, resize, tooltips;
+        ls-css: base, ls-flat, select, tabs, resize, tooltips;
+
+        fonts: Montserrat, "JetBrains Mono";
+
+        bootstrap-icons;
+    }
+
+    <script src=""></script>
+</head>
+
+<page>
+    <main %main message-style="channel">
+
+        <ls-tab %splash loading>
+
+        </ls-tab>
+
+
+        <ls-tab %error>
+            <ls-box ls-accent="red" class="fill">
+                <i class="bi-bug-fill"></i>
+            </ls-box>
+        </ls-tab>
+
+
+        <ls-tab %decide>
+            <img src="/logo.svg" alt="Mazechat logo" draggable="false">
+            <div>
+                <button onclick="tabs.setActive('login')" class="pill fill">Create account</button> <br>
+                <button onclick="tabs.setActive('intro-slideshow')" class="pill">Log-In</button>
+            </div>
+        </ls-tab>
+
+
+        <ls-tab %intro-slideshow .intro>
+            <ls-steps>
+                <!-- <div class="container">
+                    <ls-step>
+                        <img src="https://cdn.extragon.cloud/file/670a4b9db1fd04d0c3daa0de7dc842fa.png" loading="lazy" alt="Chat bubbles" draggable="false">
+                        <h1>Welcome!</h1>
+                        Maze is your new private chat and community app.<br><br>It’s fast, free, privacy-focused, efficient and feature-packed.
+                    </ls-step>
+                    <ls-step ls-accent="orange">
+                        <img src="https://cdn.extragon.cloud/file/53f7dd572b8f8b079564de83fbb995c7.png" loading="lazy" alt="Padlock" draggable="false">
+                        <h1>We don't snitch.</h1>
+                        There's no information gathering, everything is <span style=color:#00E291>free</span> and <span style=color:#FFA552>open-source</span>.
+                        <br><br>
+                        Messages are often <span style=color:#FF4C00>double-encrypted</span>, anonymous and not tied to any corporations.
+                        <br><br>
+                        If you need extra privacy, we offer an <span style=color:#414cae>anonymous mode</span> or special chats that travel through proxied tunnels, do not identify you in any way and do not store messages anywhere and burn them as soon as you read them.
+                    </ls-step>
+                    <ls-step ls-accent="red">
+                        <img src="https://cdn.extragon.cloud/file/544e43f95ae682a945bfa59d8d63b1e4.png" loading="lazy" alt="Switch" draggable="false">
+                        <h1>Feel at home.</h1>
+                        It’s the first chat app that you can customize from the ground up. You can fully customize the appearance of the app, create a personalized public profile, or even make a complete reskin if you want. It’s up to you.
+                    </ls-step>
+                    <ls-step>
+                        <img src="https://cdn.extragon.cloud/file/a060cf7e82960675345c677ffc8ecbca.png" loading="lazy" alt="Picture" draggable="false">
+                        <h1>Tell the world.</h1>
+                    </ls-step>
+                    <ls-step ls-accent="red">
+                        <img src="https://cdn.extragon.cloud/file/ef55d48037ca96a10f5990547396e45e.png" loading="lazy" alt="Coffee" draggable="false">
+                        <h1>Made for devs.</h1>
+                    </ls-step>
+                </div>
+                <div class="bottom">
+                    <button id="p-next-d" style="font-size:2em" class="pill desktop">Next <i class="bi-chevron-right"></i></button>
+                    <button id="p-next-m" style="font-size:1.5em" class="circle mobile"><i class="bi-chevron-right"></i></button>
+                </div> -->
+            </ls-steps>
+        </ls-tab>
+
+
+        <ls-tab %intro-config .intro>
+            <ls-steps>
+                <div class="container" style="font-size:small">
+                    <ls-step>
+                        <h1 style=display:block;text-align:center>Let’s set some basics.</h1>
+                        <div id="intro-theme"></div>
+                    </ls-step>
+                    <ls-step>
+                        <h1 style=display:block;text-align:center>Let’s set some basics.</h1>
+                        <div id="intro-layout"></div>
+                    </ls-step>
+                </div>
+                <div class="bottom">
+                    <button id="c-next-d" style="font-size:2em" class="pill desktop">Next <i class="bi-chevron-right"></i></button>
+                    <button id="c-next-m" style="font-size:1.5em" class="circle mobile"><i class="bi-chevron-right"></i></button>
+                </div>
+            </ls-steps>
+        </ls-tab>
+
+
+        <ls-tab %home>
+            <div %list></div>
+
+            <div %room>
+                <div %messageArea></div>
+                <div %writingArea>
+                    <ls-group join %messageBox>
+                        <div role="button" .messageBoxButton>
+                            <i .bi-plus-circle-fill></i>
+                        </div>
+
+                        <div placeholder="Enter message" %messageContent></div>
+
+                        <div title="Emoji picker" role="button" onclick="app.ui.emojiPicker()" .messageBoxButton>
+                            <i .bi-emoji-laughing-fill></i>
+                        </div>
+
+                        <div title="Send message" role="button" onclick="app.ui.send()" .messageBoxButton .sendButton>
+                            <i .bi-send-fill></i>
+                        </div>
+                    </ls-group>
+                </div>
+            </div>
+        </ls-tab>
+
+    </main>
+
+    <div %assets hidden style="display: none">
+        <div id="profilePopup" class="profile-view" style="display: none">
+            <div class="profile-banner">
+                <img draggable="false">
+                <video loop autoplay muted></video>
+            </div>
+            <div class="profile-avatar">
+                <img draggable="false">
+            </div>
+            <div class="profile-box">
+                <h2 class="profile-name"></h2>
+                <div class="profile-bio"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        LS.once("app.ready", async app => {
+            let login = await app.client.login("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MCwiaWF0IjoxNzE3MTUyODY2LCJleHAiOjE3MjIzMzY4NjZ9.f9Z_H6lS8c3dTGxxwKBLx_aRUNqI8LSzs7QNsuiX9vs")
+
+            if(!login){
+                alert("Could not log-in")
+                return
+            }
+
+            let error = await Mazec.initialize()
+            
+            if(error){
+                alert(error)
+                return
+            }
+            
+            await app.ui.openChat(9)
+        })
+    </script>
+
+    <style>
+        /* Styles that have to be available immediately */
+        :root {
+            --font: Montserrat;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            margin: 0;
+            box-sizing: border-box;
+        }
+    </style>
+</page>

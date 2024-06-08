@@ -1,0 +1,601 @@
+
+
+
+:root {
+    --messageBox-height: 20px;
+}
+
+
+
+
+main {
+    height: 100vh;
+    width: 100vw;
+    position: fixed;
+    top: 0;
+    left: 0;
+}
+
+#decide {
+    font-size: large;
+    justify-content: space-between;
+    align-items: center;
+    flex-direction: column;
+    padding: 20vh 0;
+}
+
+#decide button.pill{
+    max-width: 20em;
+    width: 40vw;
+}
+
+.intro ls-steps {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.intro ls-step {
+    height: 100%;
+    padding: 1em 8em;
+    font-size: 1.5em;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+#intro-slideshow ls-step {
+    max-width: 90%;
+}
+
+#intro-slideshow ls-step img {
+    height: 12em;
+    max-height: 320px;
+}
+
+.mobile{display:none}
+
+@media only screen and (max-width: 700px) {
+    #decide button.pill{
+        width: 80vw
+    }
+    .intro ls-step {
+        padding: 2em 3em;
+        font-size: 1em;
+        max-width: unset;
+    }
+    #intro-slideshow ls-step img {
+        height: 12em;
+    }
+    .desktop{display:none}
+    .mobile{display:block}
+}
+
+@media only screen and (min-width: 1300px) {
+    #intro-slideshow ls-step {
+        max-width: 60%;
+    }
+}
+
+@media only screen and (max-height: 400px) {
+    #decide img{
+        display: none;
+    }
+}
+
+.bottom {
+    padding: 2em;
+    display: flex;
+    justify-content: center;
+}
+
+.maze-message {
+    position: relative;
+}
+
+[message-style="bubbles"] .maze-message {
+    padding: 7px 10px;
+    background: var(--accent);
+    margin: 5px 10px;
+    border-radius: .4em;
+    width: -moz-fit-content;
+    width: fit-content;
+}
+
+[message-style="channel"] .maze-message {
+    width: 100%;
+    padding: 2px 10px;
+    padding-left: 4.5em;
+}
+
+.maze-message.margin {
+    margin-top: 1.4em;
+}
+
+[message-style="channel"] .maze-message:hover {
+    background: var(--transparent-overlay-dark);
+}
+
+[message-style="channel"] .maze-message-author {
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+}
+
+.maze-message-avatar {
+    position: absolute;
+    cursor: pointer;
+    overflow: hidden;
+    --load-size: 1em;
+    --load-width: .2em;
+}
+
+[message-style="channel"] .maze-message-avatar {
+    width: 2.5em;
+    height: 2.5em;
+    left: -.3em;
+    border-radius: 50%;
+    transform: translateX(50%);
+}
+
+[message-style="bubbles"] .maze-message-avatar {
+    width: 1.2em;
+    height: 1.2em;
+    top: -1.2em;
+    left: -1em;
+    border-radius: .2em;
+}
+
+.maze-nsfw-badge {
+    color: #fe5555;
+    margin-right: .6em;
+    font-size: .8em;
+    padding: .1em 0;
+    cursor: pointer;
+}
+
+.display-nsfw .maze-nsfw-badge {
+    display: none;
+}
+
+.maze-message-avatar img {
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+[message-style="channel"] .maze-message-avatar:hover {
+    box-shadow: 0 .25em .625em -.125em #0003;
+}
+
+[message-style="channel"] .maze-message-avatar:active {
+    transform: translate(50%, 2px);
+}
+
+.maze-message.nsfw .maze-message-avatar img,
+.profile-view.nsfw .profile-avatar img,
+.profile-view.nsfw .profile-banner :is(video, img) {
+    filter: blur(10px);
+    transform: scale(1.5);
+}
+
+.maze-message.nsfw .maze-message-avatar::after, .profile-view.nsfw .profile-avatar::after {
+    content: "\F334";
+    position: absolute;
+    border-radius: 50%;
+    width: 50%;
+    height: 50%;
+    background: var(--ui);
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: block;
+    font-family: bootstrap-icons !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #fe5555;
+}
+
+.profile-view.nsfw .profile-avatar::after {
+    font-size: 2em;
+    width: 60%;
+    height: 60%;
+}
+
+.maze-message.nsfw .maze-message-avatar::after {
+    font-size: 1.5em;
+    width: 80%;
+    height: 80%;
+}
+
+.display-nsfw .nsfw :is(video, img) {
+    filter: none !important;
+    transform: none !important;
+}
+
+.display-nsfw .maze-message-avatar::after, .display-nsfw .profile-avatar::after {
+    display: none !important;
+}
+
+.maze-message-text, .maze-message-content {
+    white-space: pre-wrap;
+    max-width: 100%;
+    overflow: hidden;
+    word-break: break-word;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.maze-message-username {
+    display: inline-block;
+    cursor: pointer;
+    margin-right: .5em;
+}
+
+.maze-message-timestamp {
+    display: inline-block;
+    margin-right: .6em;
+    color: var(--elevate-3);
+    margin-right: .6em;
+    font-size: .8em;
+    padding: .1em 0;
+    font-weight: 400;
+}
+
+.maze-message-username:hover {
+    text-decoration: underline;
+}
+
+ls-tabs, ls-steps{
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+#intro-config {
+    transform: translateY(100%);
+    transition-duration: 1s;
+}
+
+ls-tab, ls-step {
+    transition-duration: 0.4s;
+    transition-timing-function: ease;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: 0;
+    position: absolute;
+    transform: translateX(-100%);
+    opacity: 0;
+    width: 100%;
+}
+
+ls-tab.tab-active, ls-step.tab-active {
+    opacity: 1 !important;
+    transform: unset !important;
+}
+
+ls-steps .container {
+    position: relative;
+    height: 100%;
+    width: 100%;
+}
+
+#home, #list, #room {
+    display: flex;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+}
+
+#list {
+    width: 300px;
+    background: var(--ui-bg-0);
+    max-width: 50vw;
+}
+
+.cm-formatting {
+    color: var(--elevate-3);
+}
+
+.CodeMirror .CodeMirror-code .cm-link {
+    color: var(--accent);
+}
+
+#room {
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    background: var(--elevate);
+}
+
+#messageArea {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    min-width: 50vw;
+}
+
+#messageArea > *:first-child {
+    margin-top: auto !important;
+}
+
+#writingArea {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 7px;
+}
+
+#messageBox {
+    width: 100%;
+    border-radius: 24px;
+    overflow: hidden;
+    background: var(--ui);
+    min-height: calc(1em + var(--messageBox-height));
+    padding: 0 2px;
+}
+
+.messageBoxButton {
+    height: calc(1em + var(--messageBox-height));
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: .1s color;
+    color: var(--elevate-5);
+    font-size: calc(var(--messageBox-height));
+}
+
+.sendButton {
+    margin-right: 4px;
+    margin-top: 5px;
+    border-left: 1px solid var(--transparent-overlay);
+    height: calc(var(--messageBox-height) + 1em - 10px);
+}
+
+.sendButton i {
+    font-size: var(--messageBox-height);
+    transform: rotate(45deg);
+}
+
+.messageBoxButton:hover {
+    color: var(--color);
+}
+
+.messageBoxButton:active {
+    color: var(--elevate-4);
+}
+
+.messageBoxButton:focus {
+    outline: 1px solid var(--accent)
+}
+
+#writingArea .CodeMirror {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    color: var(--color);
+    border: 0;
+}
+
+#writingArea .CodeMirror-scroll {
+    min-height: unset;
+}
+
+#writingArea .CodeMirror, #writingArea .CodeMirror-scroll{
+    max-height: 500px
+}
+
+#writingArea .CodeMirror-cursor {
+    border-left: 1px solid currentColor;
+}
+
+#writingArea .CodeMirror .CodeMirror-selected {
+    background: var(--transparent-overlay-strong);
+}
+
+.CodeMirror-widget {
+    pointer-events: none;
+}
+
+#messageContent .CodeMirror-lines {
+    padding: 0;
+}
+
+.CodeMirror-wrap pre {
+    word-break: break-all;
+}
+
+.emoji {
+    display: inline-block;
+    width: 1.375em;
+    height: 1.375em;
+    background-size: contain;
+}
+
+#messageContent {
+    padding: calc(var(--messageBox-height) / 2) 0;
+    flex: 1;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.profile-view :is(h1, h2, h3, h4, h5) {
+    margin: 0;
+}
+
+.profile-bio {
+    user-select: text;
+}
+
+.profile-bio h3 {
+    margin: 10px 0;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--color);
+    font-size: 14px;
+}
+
+.profile-name {
+    margin: 8px 0 !important;
+    margin-top: 18px !important;
+}
+
+.profile-view {
+    position: fixed;
+    top: 198px;
+    left: 360px;
+    width: 20em;
+    height: 30em;
+    background: var(--ui);
+    border-radius: 1em;
+    outline: .1em solid var(--elevate-1);
+    box-shadow: 0 .25em 2em 0 #0004;
+    overflow: hidden;
+    flex-direction: column;
+}
+
+.profile-banner {
+    min-height: 8em;
+    overflow: hidden;
+}
+
+.profile-banner :is(video, img) {
+    width: 100%;
+    aspect-ratio: 4/2;
+    object-fit: cover;
+}
+
+.profile-avatar {
+    position: absolute;
+    left: 50%;
+    top: 25%;
+    width: 8em;
+    height: 8em;
+    border-radius: 50%;
+    overflow: hidden;
+    transform: translate(-50%,-70%);
+    outline: .7em solid var(--ui);
+}
+
+.profile-avatar img {
+    width: 100%;
+    height: 100%;
+}
+
+.profile-box {
+    margin: 1em;
+    margin-top: 3em;
+    flex: 1;
+    background: var(--ui-bg-1);
+    border-radius: 1em;
+    padding: 1px 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+.maze-message-more-container {
+    max-height: 32em;
+    overflow: hidden;
+}
+
+.maze-message-more-container::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, var(--background));
+    height: 100px;
+}
+
+.maze-message :is(h1, h2, h3, h4, h5, h6) {
+    margin: 0;
+    display: inline-block;
+}
+
+.maze-message-more-button-container {
+    position: absolute;
+    bottom: 0;
+    z-index: 1;
+    left: 50%;
+    transform: translateX(calc(-50% - .5em));
+    -webkit-user-select: none;
+    user-select: none;
+    background: var(--background);
+    border-radius: 1em;
+    overflow: hidden;
+    margin: .5em;
+}
+
+#messageArea button.maze-message-more-button {
+    white-space: pre;
+    margin: 0;
+}
+
+#home .ls-resize-bar:hover {
+    outline: none;
+}
+
+#home .ls-resize-bar {
+    background: none;
+}
+
+.message-code-block {
+    background: var(--ui-bg-1);
+    padding: .4em .6em;
+    border-radius: .5em;
+    border: .016em solid var(--ui-border);
+    margin-right: 130px;
+    min-width: 80%;
+    font-family: "JetBrains Mono";
+}
+
+.message-spoiler, code {
+    display: inline-block;
+}
+
+.message-spoiler {
+    border-radius: .2em;
+    padding: 0 .1em;
+}
+
+.message-spoiler:not(.revealed) {
+    background: #121212;
+    color: transparent;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.message-spoiler:hover:not(.revealed) {
+    background: #151515;
+}
+
+.maze-message-text a:hover {
+    text-decoration: underline;
+}
+
+code {
+    border-radius: .5em;
+    padding: .1em .6em;
+    font-size: .8em;
+    background: var(--ui-bg-0);
+    font-family: "JetBrains Mono";
+}
+
+pre {
+    margin: 0;
+}
+
+[ls-theme="light"] #messageBox {
+    background: var(--elevate-0);
+}
