@@ -1,0 +1,29 @@
+<body>
+    <script>
+        if(location.search == "?result=success" && location.hash.startsWith("#")){
+            localStorage["==temporary.2226b75"] = location.hash.replace("#", "")
+            location.replace("/")
+        } else {
+            alert(`An error occured while trying to log in (i was lazy to do it properly so here's the whole thing we know: ${location.search})`)
+        }
+    </script>
+    <style>
+        :root {
+            background-color: #111;
+            color: #fff;
+        }
+
+        html, body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+    </style>
+
+    <h3>
+        Please wait...
+    </h3>
+</body>

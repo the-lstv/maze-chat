@@ -6,8 +6,6 @@
 }
 
 
-
-
 main {
     height: 100vh;
     width: 100vw;
@@ -29,57 +27,17 @@ main {
     width: 40vw;
 }
 
-.intro ls-steps {
-    width: 100%;
+#login {
     display: flex;
-    flex-direction: column;
-}
-
-.intro ls-step {
-    height: 100%;
-    padding: 1em 8em;
-    font-size: 1.5em;
-    overflow-x: hidden;
-    overflow-y: auto;
-}
-
-#intro-slideshow ls-step {
-    max-width: 90%;
-}
-
-#intro-slideshow ls-step img {
-    height: 12em;
-    max-height: 320px;
+    align-items: center;
+    justify-content: center;
 }
 
 .mobile{display:none}
 
 @media only screen and (max-width: 700px) {
-    #decide button.pill{
-        width: 80vw
-    }
-    .intro ls-step {
-        padding: 2em 3em;
-        font-size: 1em;
-        max-width: unset;
-    }
-    #intro-slideshow ls-step img {
-        height: 12em;
-    }
-    .desktop{display:none}
-    .mobile{display:block}
-}
-
-@media only screen and (min-width: 1300px) {
-    #intro-slideshow ls-step {
-        max-width: 60%;
-    }
-}
-
-@media only screen and (max-height: 400px) {
-    #decide img{
-        display: none;
-    }
+    .desktop{ display: none }
+    .mobile{ display: block }
 }
 
 .bottom {
@@ -248,7 +206,7 @@ main {
     text-decoration: underline;
 }
 
-ls-tabs, ls-steps{
+ls-tabs {
     display: flex;
     width: 100%;
     height: 100%;
@@ -259,7 +217,7 @@ ls-tabs, ls-steps{
     transition-duration: 1s;
 }
 
-ls-tab, ls-step {
+ls-tab {
     transition-duration: 0.4s;
     transition-timing-function: ease;
     left: 0;
@@ -272,15 +230,9 @@ ls-tab, ls-step {
     width: 100%;
 }
 
-ls-tab.tab-active, ls-step.tab-active {
+ls-tab.tab-active {
     opacity: 1 !important;
     transform: unset !important;
-}
-
-ls-steps .container {
-    position: relative;
-    height: 100%;
-    width: 100%;
 }
 
 #home, #list, #room {
@@ -598,4 +550,41 @@ pre {
 
 [ls-theme="light"] #messageBox {
     background: var(--elevate-0);
+}
+
+.list-items {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    gap: 8px;
+}
+
+.list-item {
+    display: flex;
+    width: 100%;
+    background: var(--elevate);
+    padding: 8px 15px;
+    border-radius: var(--br-lg);
+    cursor: pointer;
+}
+
+.list-item:hover {
+    background: var(--elevate-1);
+}
+
+.list-item:active {
+    background: var(--transparent-overlay-dark-strong);
+}
+
+.list-item > i {
+    transform: scale(1.2) translateX(-5px);
+    opacity: .4;
+}
+
+#login {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
 }

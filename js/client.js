@@ -22,7 +22,7 @@
         eventList = [
             "heartbeat",
             "message",
-            "listen",
+            "subscribe",
             "update",
             "typing",
             "authorize",
@@ -220,12 +220,12 @@
 
             async open(){
                 _this.isOpen = true;
-                _this.parent.internal_subscribe(true, 0, _this.id)
+                _this.parent.internal_subscribe(true, `chatMessages.${_this.id}`)
             }
 
             async close(){
                 _this.isOpen = false;
-                _this.parent.internal_subscribe(false, 0, _this.id)
+                _this.parent.internal_subscribe(false, `chatMessages.${_this.id}`)
             }
 
             traverse(from, to, callback){
@@ -325,7 +325,7 @@
                 _this = this;
     
                 this.queue = [];
-                this.listenTo = {};
+                this.listening = {};
 
                 this.user = {};
     
@@ -420,13 +420,13 @@
                 this.chats = {};
             }
 
-            async login(token){
+            async login(token, callback = data => data){
                 _this.user.token = token
                 let test = await _this.request().json();
 
                 if(test.user_fragment && !test.user_fragment.error){
-                    return _this.user.fragment = test.user_fragment
-                } else return false
+                    return callback(_this.user.fragment = test.user_fragment)
+                } else return callback(false)
             }
     
             request(endpoint = "", options = {}){
@@ -527,10 +527,10 @@
 
                             _this.send(["authorize", _this.user.token])                            
     
-                            for(let hash of Object.keys(_this.listenTo)){
-                                let evt = _this.listenTo[hash];
-                                if(!evt) continue;
-                                _this.internal_subscribe(true, ...evt)
+                            // re-subscribe to previous events
+                            for(let event of Object.keys(_this.listening)){
+                                if(!_this.listening[event]) continue;
+                                _this.internal_subscribe(true, event)
                             }
     
                             if(_this.heartBeat) clearInterval(_this.heartBeat);
@@ -571,14 +571,16 @@
                 })
             }
     
-            internal_subscribe(enable = true, ...evt){
-                console.log(enable, evt);
-                let hash = JSON.stringify(evt).split('').reduce((a, b) => {
-                    a = (a << 5) - a + b.charCodeAt(0);
-                    return a & a;
-                }, 0);
-                _this.listenTo[hash] = enable ? evt : null
-                _this.send(["listen", !!enable, ...evt])
+            internal_subscribe(enable = true, event){
+                // console.log(enable, evt);
+                // let hash = JSON.stringify(evt).split('').reduce((a, b) => {
+                //     a = (a << 5) - a + b.charCodeAt(0);
+                //     return a & a;
+                // }, 0);
+                if(typeof enable !== "boolean") throw "first argument must be a boolean";
+
+                _this.listening[event] = enable
+                _this.send(["subscribe", enable, `maze.${event}`])
             }
     
             send(data){
@@ -597,10 +599,10 @@
             }
     
             async create(options){
-                return await _this.request("/create", {
+                return (await _this.request("/create", {
                     method: "POST",
                     body: JSON.stringify(options)
-                }).json()
+                }).json())
             }
     
             async chat(id){
@@ -617,6 +619,10 @@
                         code: chat.code || -1
                     }
                 }
+            }
+
+            async listChannels(){
+                return await _this.request("/list").json()
             }
         })())(gateway, options)
     }

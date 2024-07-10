@@ -2,7 +2,7 @@ LS.Color.watchScheme() // Set light mode if preffered and watch for changes
 
 let app, tabs, Mazec, chat;
 
-M.on("load", ()=>{
+M.on("load", async ()=>{
 
     app = {
         client: new MazecClient("http://api.extragon.test/v2/mazec"),
@@ -35,6 +35,8 @@ M.on("load", ()=>{
 
             async openChat(id){
                 let chat = await Mazec.chat(id)
+
+                if(app.activeChatID == id) return;
 
                 if(chat.error){
                     let message = chat.error;
@@ -357,21 +359,64 @@ M.on("load", ()=>{
 
     Mazec = app.client;
     tabs = app.screen;
+    
+    let token = localStorage["==temporary.2226b75"];
 
-    tabs.setActive('home');
+    tabs.setActive(token? 'home' : 'login');
+
+    if(token) {
+        let login = await app.client.login(token)
+
+        if(!login){
+            alert("Could not log-in")
+            tabs.setActive('login');
+            return
+        }
+
+        let error = await Mazec.initialize()
+
+        if(error){
+            alert(error)
+            tabs.setActive('login');
+            return
+        }
+
+
+        let channels = await Mazec.listChannels();
+
+        for(let channel of channels){
+            console.log(channel);
+
+            if(!channel.isMember) continue;
+
+            O("#list .list-items").add(N({
+                class: "list-item",
+                inner: [
+                    N("i", {class: "bi-hash"}),
+                    N("span", {
+                        innerText: channel.name
+                    })
+                ],
+
+                onclick(){
+                    app.ui.openChat(channel.room)
+                }
+            }))
+        }
+
+
+        // Load more messages when scrolling
+        app.ui.messageScroller.on("scroll", event => {
+            if(app.ui.messageScroller.scrollTop < 50){
+                console.log("Should load more");
+            }
+        })
+    }
 
     LS.invoke("app.ready", app);
     
     LS.GlobalEvents.prepare({
         name: "app.ready",
         completed: true
-    })
-
-
-    // Load more messages when scrolling
-    app.ui.messageScroller.on("scroll", event => {
-        if(app.ui.messageScroller.scrollTop < 50){
-            console.log("Should load more");
-        }
     })
 })

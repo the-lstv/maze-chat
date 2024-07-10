@@ -19,8 +19,6 @@
 
         bootstrap-icons;
     }
-
-    <script src=""></script>
 </head>
 
 <page>
@@ -47,47 +45,41 @@
         </ls-tab>
 
 
-        <ls-tab %intro-slideshow .intro>
-            <ls-steps>
-                <!-- <div class="container">
-                    <ls-step>
-                        <img src="https://cdn.extragon.cloud/file/670a4b9db1fd04d0c3daa0de7dc842fa.png" loading="lazy" alt="Chat bubbles" draggable="false">
-                        <h1>Welcome!</h1>
-                        Maze is your new private chat and community app.<br><br>It’s fast, free, privacy-focused, efficient and feature-packed.
-                    </ls-step>
-                    <ls-step ls-accent="orange">
-                        <img src="https://cdn.extragon.cloud/file/53f7dd572b8f8b079564de83fbb995c7.png" loading="lazy" alt="Padlock" draggable="false">
-                        <h1>We don't snitch.</h1>
-                        There's no information gathering, everything is <span style=color:#00E291>free</span> and <span style=color:#FFA552>open-source</span>.
-                        <br><br>
-                        Messages are often <span style=color:#FF4C00>double-encrypted</span>, anonymous and not tied to any corporations.
-                        <br><br>
-                        If you need extra privacy, we offer an <span style=color:#414cae>anonymous mode</span> or special chats that travel through proxied tunnels, do not identify you in any way and do not store messages anywhere and burn them as soon as you read them.
-                    </ls-step>
-                    <ls-step ls-accent="red">
-                        <img src="https://cdn.extragon.cloud/file/544e43f95ae682a945bfa59d8d63b1e4.png" loading="lazy" alt="Switch" draggable="false">
-                        <h1>Feel at home.</h1>
-                        It’s the first chat app that you can customize from the ground up. You can fully customize the appearance of the app, create a personalized public profile, or even make a complete reskin if you want. It’s up to you.
-                    </ls-step>
-                    <ls-step>
-                        <img src="https://cdn.extragon.cloud/file/a060cf7e82960675345c677ffc8ecbca.png" loading="lazy" alt="Picture" draggable="false">
-                        <h1>Tell the world.</h1>
-                    </ls-step>
-                    <ls-step ls-accent="red">
-                        <img src="https://cdn.extragon.cloud/file/ef55d48037ca96a10f5990547396e45e.png" loading="lazy" alt="Coffee" draggable="false">
-                        <h1>Made for devs.</h1>
-                    </ls-step>
+        <!-- temporary! -->
+        <ls-tab %login .intro>
+
+            <img src="https://cdn.extragon.cloud/file/670a4b9db1fd04d0c3daa0de7dc842fa.png?size=250" loading="lazy" alt="Chat bubbles" draggable="false">
+
+            <div style="text-align:center">
+                <div style="font-size:2.5em;font-weight:900">
+                    MazeChat
                 </div>
-                <div class="bottom">
-                    <button id="p-next-d" style="font-size:2em" class="pill desktop">Next <i class="bi-chevron-right"></i></button>
-                    <button id="p-next-m" style="font-size:1.5em" class="circle mobile"><i class="bi-chevron-right"></i></button>
-                </div> -->
-            </ls-steps>
+                
+                <h3 style="margin:0">Select how you want to continue:</h3>
+
+                <br><br>
+
+                <ls-box style="display:flex;flex-direction:column">
+                    <a style="display: block; width: 100%" ls-accent="deep-orange" href="http://lstv.test/sso?app=11&ref=https%3A%2F%2Fchat.lstv.space%2Fauth-finish&permissions=16.w"><button style="width: 100%">Login with LSTV</button></a>
+                </ls-box>
+
+                <br><br>
+
+                <b>(Bare with me till I make a proper login / setup screen.)</b>
+
+                <br><br>
+
+                <div style="width:450px;font-size:.8em;color:var(--elevate-3);text-align:left;"> <li>This product is considered <ls-box .inline .color ls-accent="purple">unreleased</ls-box>. It is pre-alpha and may not work as promised. No warranty or guarantees are made on its functionality, availability, reliability or the retention of your data.</li> <br> <li>Maze is a service provided by <ls-box .inline .color ls-accent="aquamarine">LSTV</ls-box> - same <a href="https://lstv.space/pp">Privacy Policy</a> and <a href="https://lstv.space/tos">Terms of Service</a> apply.</li> </div>
+            </div>
+
+
+            <br> <br>
+
         </ls-tab>
 
 
         <ls-tab %intro-config .intro>
-            <ls-steps>
+            <!-- <ls-steps>
                 <div class="container" style="font-size:small">
                     <ls-step>
                         <h1 style=display:block;text-align:center>Let’s set some basics.</h1>
@@ -102,12 +94,16 @@
                     <button id="c-next-d" style="font-size:2em" class="pill desktop">Next <i class="bi-chevron-right"></i></button>
                     <button id="c-next-m" style="font-size:1.5em" class="circle mobile"><i class="bi-chevron-right"></i></button>
                 </div>
-            </ls-steps>
+            </ls-steps> -->
         </ls-tab>
 
 
         <ls-tab %home>
-            <div %list></div>
+            <div %list>
+                <div .list-items>
+
+                </div>
+            </div>
 
             <div %room>
                 <div %messageArea></div>
@@ -134,7 +130,7 @@
     </main>
 
     <div %assets hidden style="display: none">
-        <div id="profilePopup" class="profile-view" style="display: none">
+        <div %profilePopup .profile-view hidden>
             <div class="profile-banner">
                 <img draggable="false">
                 <video loop autoplay muted></video>
@@ -148,26 +144,6 @@
             </div>
         </div>
     </div>
-
-    <script>
-        LS.once("app.ready", async app => {
-            let login = await app.client.login("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MCwiaWF0IjoxNzE3MTUyODY2LCJleHAiOjE3MjIzMzY4NjZ9.f9Z_H6lS8c3dTGxxwKBLx_aRUNqI8LSzs7QNsuiX9vs")
-
-            if(!login){
-                alert("Could not log-in")
-                return
-            }
-
-            let error = await Mazec.initialize()
-            
-            if(error){
-                alert(error)
-                return
-            }
-            
-            await app.ui.openChat(9)
-        })
-    </script>
 
     <style>
         /* Styles that have to be available immediately */
