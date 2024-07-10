@@ -5,7 +5,7 @@ let app, tabs, Mazec, chat;
 M.on("load", async ()=>{
 
     app = {
-        client: new MazecClient("http://api.extragon.test/v2/mazec"),
+        client: new MazecClient(location.origin.endsWith("test")? "http://api.extragon.test/v2/mazec": "https://api.extragon.cloud/v2/mazec"),
 
         screen: LS.Tabs("main", "#main", {
             mode: "presentation",
