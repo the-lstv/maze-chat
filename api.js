@@ -189,7 +189,7 @@ API = {
                     latest_client: "0.2.0",
                     lowest_client: "0.1.9",
                     sockets: [
-                        `ws${req.secured? "s": ""}://${req.domain}/v2/mazec/`
+                        `ws${req.domain.endsWith("test")? "": "s"}://${req.domain}/v2/mazec/`
                     ]
                 }))
                 // todo: implement fast_stringify, possibly change things around
@@ -239,13 +239,14 @@ API = {
                         if(row.err) return error(row.err);
 
                         if(row.result.length < 1) {
-                            let thing = await mazeDatabase.table("chat.profiles").insert({...req.body, ...{
+                            let thing = await mazeDatabase.table("chat.profiles").insert({
+                                ...req.body,
                                 link: User.id
-                            }})
+                            })
 
                             if(thing.err) return error(thing.err);
 
-                            success()
+                            res.send(`{"success":true}`)
                         } else {
                             error("Profile for this user was already created. Did you mean to use \"patch\"?")
                         }
@@ -339,8 +340,6 @@ API = {
                                         //     }
                                         // }
 
-                                        console.log(`maze.chatMessages.${id}`);
-
                                         backend.broadcast(`maze.chatMessages.${id}`, A2U8([
                                             eventList.get("message"),
                                             msg.author,
@@ -350,7 +349,7 @@ API = {
                                             msg.attachments.replace(/[\[\]]/g, ""),
                                             msg.mentions.replace(/[\[\]]/g, ""),
                                             msg.text
-                                        ]), true)
+                                        ]), true, true)
     
                                         res.send(JSON.stringify({id: msg.id}));
                                     } else {
@@ -430,17 +429,23 @@ API = {
                                     response = await mazeDatabase.table("chat.messages").update("where id=" + (+data.id), patch)
                                     
                                     if(!response.err){
-                                        for(let v of Object.values(clients)){
-                                            if(v.listeners.message.includes(id)){
-                                                v.write([
-                                                    eventList.get("delete"),
-                                                    id,
-                                                    (+data.id)
-                                                ])
-                                            }
-                                        }
+                                        // for(let v of Object.values(clients)){
+                                        //     if(v.listeners.message.includes(id)){
+                                        //         v.write([
+                                        //             eventList.get("delete"),
+                                        //             id,
+                                        //             (+data.id)
+                                        //         ])
+                                        //     }
+                                        // }
+
+                                        backend.broadcast(`maze.chatMessages.${id}`, A2U8([
+                                            eventList.get("delete"),
+                                            id,
+                                            (+data.id)
+                                        ]), true, true)
     
-                                        send({success: true});
+                                        res.send(`{"success":true}`);
                                     } else {
                                         return error(24)
                                     }
@@ -611,9 +616,11 @@ API = {
 
                     case "message": break;
 
-                    case "subscribe":
+                    case "typing":
+                        backend.broadcast(`maze.chatMessages.${data[1]}`, A2U8([eventList.get("typing"), data[1], ws.user.id]), true)
+                    break;
 
-                        console.log(data[1], data[2]);
+                    case "subscribe":
 
                         if(data[1]) ws.subscribe(data[2]); else ws.unsubscribe(data[2])
                         

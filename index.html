@@ -107,7 +107,22 @@
 
             <div %room>
                 <div %messageArea></div>
+
+                <div %messageButtons hidden>
+                    <div .messageButton ls-tooltip="React" .messageReactButton><i .bi-emoji-smile-fill></i></div>
+                    <div .messageButton ls-tooltip="Reply" .messageReplyButton><i .bi-reply-fill></i></div>
+                    <div .messageButtonGroup .ownMessageButtons>
+                        <div onclick="app.ui.activeMessageEdit()" .messageButton ls-tooltip="Edit" .messageEditButton><i .bi-pencil-fill></i></div>
+                        <div onclick="app.ui.activeMessageDelete()" .messageButton ls-tooltip="Delete" .messageDeleteButton><i .bi-trash-fill></i></div>
+                    </div>
+                </div>
+
                 <div %writingArea>
+                    <div %typingUsers .hidden>
+                        <div .typingDots></div>
+                        <div .typingUsersText></div>
+                    </div>
+
                     <ls-group join %messageBox>
                         <div role="button" .messageBoxButton>
                             <i .bi-plus-circle-fill></i>

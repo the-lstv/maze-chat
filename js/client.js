@@ -196,10 +196,16 @@
                 this.isOpen = true
                 this.events = new((LS.EventResolver || options.EventResolver)())(this);
 
+                this.typingTimeout = 0;
+                this.typingUsers = [];
+                this.typingUserTimeouts = {};
+
                 this.messageBuffer = {};
             }
 
             async send(text, attachments, mentions){
+                this.typingTimeout = 0;
+
                 return await _this.parent.request("/chat/" + _this.id + "/post/", {
                     method: "POST",
                     body: JSON.stringify({
@@ -208,15 +214,15 @@
                 }).json()
             }
 
-            latencyTest(message = "Hi! I am testing the latency."){
-                return new Promise(async (r)=>{
-                    _this.on("message", (received)=>{
-                        r(Date.now() - start)
-                    })
-                    let start = Date.now(),
-                        msg = await chat.send(message);
-                })
-            }
+            // latencyTest(message = "Hi! I am testing the latency."){
+            //     return new Promise(async (r)=>{
+            //         _this.on("message", (received)=>{
+            //             r(Date.now() - start)
+            //         })
+            //         let start = Date.now(),
+            //         msg = await chat.send(message);
+            //     })
+            // }
 
             async open(){
                 _this.isOpen = true;
@@ -226,6 +232,13 @@
             async close(){
                 _this.isOpen = false;
                 _this.parent.internal_subscribe(false, `chatMessages.${_this.id}`)
+            }
+
+            sendTyping(){
+                if((Date.now() - _this.typingTimeout) < 9500) return;
+
+                _this.parent.send(["typing", _this.id])
+                _this.typingTimeout = Date.now()
             }
 
             traverse(from, to, callback){
@@ -302,6 +315,11 @@
                         let messages = await query.json();
 
                         for(let message of messages){
+                            if(_this.messageBuffer[message.id]){
+                                Object.assign(message, _this.messageBuffer[message.id])
+                                continue
+                            }
+
                             _this.messageBuffer[message.id] = message;
                             message.room = _this.id;
                             message.renderBuffer = null;
@@ -363,9 +381,19 @@
                                         text: event[7]
                                     };
 
-                                    this.chats[event[2]].invoke("message", buffer)
+                                    let chat = this.chats[event[2]];
 
-                                    this.chats[event[2]].messageBuffer[event[3]] = buffer
+                                    chat.typingUsers = chat.typingUsers.filter(user => user !== event[1])
+
+                                    chat.invoke("typing.stop", event[1]);
+
+                                    if(chat.typingUsers.length < 1){
+                                        chat.invoke("typing.stop.all");
+                                    }
+
+                                    chat.invoke("message", buffer)
+
+                                    chat.messageBuffer[event[3]] = buffer
                                 };
                             break;
                             case "edit":
@@ -388,6 +416,27 @@
                                     this.chats[event[1]].invoke("delete", event[2]);
                                     
                                     delete this.chats[event[1]].messageBuffer[event[2]]
+                                }
+                            break;
+                            case "typing":
+                                let chat = this.chats[event[1]];
+
+                                if(chat){
+                                    if(chat.typingUserTimeouts[event[2]]) clearInterval(chat.typingUserTimeouts[event[2]])
+
+                                    if(!chat.typingUsers.includes(event[2])) chat.typingUsers.push(event[2]);
+
+                                    chat.invoke("typing", event[2]);
+                                    
+                                    chat.typingUserTimeouts[event[2]] = setTimeout(() => {
+                                        chat.typingUsers = chat.typingUsers.filter(user => user !== event[2])
+
+                                        chat.invoke("typing.stop", event[2]);
+
+                                        if(chat.typingUsers.length < 1){
+                                            chat.invoke("typing.stop.all");
+                                        }
+                                    }, 10000)
                                 }
                             break;
                         }

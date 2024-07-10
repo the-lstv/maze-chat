@@ -66,6 +66,20 @@ client.login("BOT_TOKEN", async fragment => {
         console.log(`Message with ID ${id} got deleted`);
     })
 
+    chat.on("typing", (user) => {
+        console.log(`User ${user} started typing in the channel`);
+    })
+
+    chat.on("typing.stop.all", () => {
+        console.log(`All users stopped typing in the channel`);
+    })
+
+    // An array of users who are currently typing in this channel, using the standard 10 second timeout. (including you!)
+    chat.typingUsers
+
+    // Make yourself type
+    chat.sendTyping()
+
 
 
 

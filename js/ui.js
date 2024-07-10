@@ -73,8 +73,13 @@ LS.once("app.ready", async function(app) {
     }
 
     let postEvent = false;
+
     app.ui.messageContent.on('renderLine', (instance, line, element) => {
         if(postEvent) return postEvent = false; else renderEmojis(instance, line);
+    });
+
+    app.ui.messageContent.on('change', () => {
+        if(app.activeChat && app.ui.messageContent.doc.getValue().length > 0) app.activeChat.sendTyping()
     });
 })
 

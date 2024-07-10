@@ -12,31 +12,76 @@ M.on("load", async ()=>{
             list: false
         }),
 
+        options: {
+            messageSampleSize: 50
+        },
+
         emojiMap: {
             ':smile:': 'https://cdn.discordapp.com/emojis/752860480758087711.gif?size=128&quality=lossless',
-            ':yeah:': 'https://cdn.discordapp.com/emojis/1083458064696475758.webp?size=128&quality=lossless',
-            ':xd:': 'https://cdn.extragon.cloud/file/c098d17c1fae1026a20451aa0c53d6ce.webp?size=80'
+            ':yeah:': 'https://cdn.discordapp.com/emojis/1083458064696475758.webp?size=128&quality=lossless'
         },
+
+        awaitingMessage: null,
 
         ui: {
             messageScroller: O("#messageArea"),
+
+            activeMessageElement: null,
+            activeMessage: null,
 
             messagesScrollBottom(){
                 O("#messageArea").scroll(0, O("#messageArea").scrollHeight)
             },
 
-            send(){
-                app.activeChat.send(app.ui.messageContent.doc.getValue())
+            async send(){
+                if(app.awaitingMessage) return;
+
+                let content = app.ui.messageContent.doc.getValue();
+                if(content.length < 1) return;
+                
+                // Fake placeholder:
+                app.awaitingMessage = await app.messageElement({
+                    author: app.client.user.id,
+                    room: app.activeChat.id,
+                    id: null,
+                    timestamp: Date.now(),
+                    text: content,
+                    sent: true
+                });
 
                 app.ui.messageContent.doc.setValue("")
-
                 app.ui.messagesScrollBottom()
+
+                let promise = app.activeChat.send(content)
+
+                setTimeout(async () => {
+                    if(!app.awaitingMessage) return;
+
+                    O("#messageArea").add(app.awaitingMessage)
+                    app.ui.messagesScrollBottom()
+
+                    let result = await promise;
+
+                    console.log(result);
+
+                    if(!result || result.error){
+                        app.awaitingMessage.class("sent-message-waiting", false)
+                        app.awaitingMessage.class("sent-message-errored")
+                    }
+
+                    app.awaitingMessage = null
+                }, 50)
             },
 
             async openChat(id){
                 let chat = await Mazec.chat(id)
 
                 if(app.activeChatID == id) return;
+
+                app.messageOffset = 0;
+                app.messageScrollOffset = 0
+
+                app.messageOffsetMax = Infinity;
 
                 if(chat.error){
                     let message = chat.error;
@@ -57,13 +102,16 @@ M.on("load", async ()=>{
 
                 app.activeChatID = id;
 
-                for(let message of (await chat.get(50)).reverse()){
-                    let element = await app.messageElement(message);
-                    O("#messageArea").add(element)
-                }
+                app.ui.fetchMessages(true)
 
                 chat.on("message", async (msg)=>{
+                    if(msg.author === app.client.user.id) {
+                        if(app.awaitingMessage) app.awaitingMessage.remove()
+                        app.awaitingMessage = null
+                    }
+
                     O("#messageArea").add(await app.messageElement(msg))
+                    app.ui.messagesScrollBottom()
                 })
 
                 chat.on("edit", (buffer) => {
@@ -82,8 +130,78 @@ M.on("load", async ()=>{
                     }
                 })
 
+                chat.on("typing", async (id) => {
+                    app.ui.drawTyping()
+                })
+
+                chat.on("typing.stop", async (id) => {
+                    if(app.activeChat.typingUsers.filter(user => user !== app.client.user.id).length < 1) O("#typingUsers").class("hidden")
+                })
+
                 app.ui.messagesScrollBottom()
+                app.ui.drawTyping()
             },
+
+            async fetchMessages(clear){
+                if(app.messageOffset >= app.messageOffsetMax) return;
+
+                if (clear) for(let element of O("#messageArea").getAll(".maze-message")) element.remove();
+                let data = await app.activeChat.get(app.options.messageSampleSize, app.messageOffset),
+                    originalScrollHeight = app.ui.messageArea.scrollHeight,
+                    originalScrollOffset = app.ui.messageArea.scrollTop
+                ;
+
+                if(data.length < app.options.messageSampleSize) app.messageOffsetMax = app.messageOffset + app.options.messageSampleSize;
+
+                for(let message of data){
+                    let element = app.activeChat.messageBuffer[message.id].renderBuffer || await app.messageElement(message);
+
+                    if(app.ui.messageArea.children.length > 0){
+                        app.ui.messageArea.children[0].addBefore(element)
+                    } else {
+                        app.ui.messageArea.add(element)
+                    }
+                }
+
+                app.ui.messageArea.scrollTop = originalScrollOffset + (app.ui.messageArea.scrollHeight - originalScrollHeight)
+            },
+
+            async drawTyping(){
+                let typingUsers = app.activeChat.typingUsers.filter(user => user !== app.client.user.id);
+
+                if(typingUsers.length < 1) return O("#typingUsers").class("hidden");
+
+                O("#typingUsers").class("hidden", false)
+
+                if(typingUsers.length > 5) return O(".typingUsersText").set(`Several people are typing`);
+
+                let userList = [];
+
+                for(let user of typingUsers){
+                    userList.push((await Mazec.profile(user)).displayname)
+                }
+
+                O(".typingUsersText").set(`${userList.join(", ")} ${userList.length > 1? "are": "is"} typing`)
+            },
+
+            updateButtons(){
+                if(!app.ui.activeMessageElement) return O("#messageButtons").applyStyle({display: "none"});
+
+                O("#messageButtons").applyStyle({
+                    top: app.ui.activeMessageElement.getBoundingClientRect().top + "px",
+                    display: "flex"
+                })
+            },
+
+            activeMessageEdit(){
+
+            },
+
+            activeMessageDelete(){
+                app.activeChat.message(app.ui.activeMessage.id).delete()
+            },
+
+            messageArea: O("#messageArea"),
 
             profileShown: false,
 
@@ -255,12 +373,12 @@ M.on("load", async ()=>{
 
             let condensed = app.prevMessage && app.prevMessage.room == messageBuffer.room && app.prevMessage.author == messageBuffer.author && (messageBuffer.timestamp - app.prevMessage.timestamp) < 300000;
 
-            app.prevMessage = messageBuffer
+            if(!messageBuffer.sent) app.prevMessage = messageBuffer
 
             let messageContent = app.renderMarkdown(messageBuffer.text);
 
             let element = N({
-                class: "maze-message " + (messageBuffer.author == app.client.user.id? "own" : "not-own") + (profile.nsfw? " nsfw": "") + (!condensed? " margin": ""),
+                class: "maze-message " + (messageBuffer.author == app.client.user.id? "own" : "not-own") + (profile.nsfw? " nsfw": "") + (!condensed? " margin": "") + (messageBuffer.sent? " sent-message-waiting" : ""),
                 id: "message-" + messageBuffer.id,
                 inner: [
 
@@ -297,7 +415,21 @@ M.on("load", async ()=>{
                         } : {inner: messageContent},
                         class: "maze-message-" + (messageBuffer.text.length > 4000 ? "content" : "text")
                     })
-                ]
+                ],
+
+                onmouseenter(){
+                    app.ui.activeMessageElement = this
+                    app.ui.activeMessage = messageBuffer
+                    app.ui.updateButtons();
+                    
+                    O(".ownMessageButtons").style.display = messageBuffer.author == app.client.user.id? "flex": "none"
+                },
+
+                onmouseleave(){
+                    if(O("#messageButtons").matches(":hover")) return;
+                    app.ui.activeMessageElement = null
+                    app.ui.updateButtons();
+                }
             })
 
 
@@ -385,8 +517,6 @@ M.on("load", async ()=>{
         let channels = await Mazec.listChannels();
 
         for(let channel of channels){
-            console.log(channel);
-
             if(!channel.isMember) continue;
 
             O("#list .list-items").add(N({
@@ -406,8 +536,19 @@ M.on("load", async ()=>{
 
 
         // Load more messages when scrolling
-        app.ui.messageScroller.on("scroll", event => {
-            if(app.ui.messageScroller.scrollTop < 50){
+
+        let loadingMessages = false;
+        app.ui.messageScroller.on("scroll", async event => {
+            O("#messageButtons").applyStyle({display: "none"});
+
+            if(!loadingMessages && app.ui.messageScroller.scrollTop < 50 && (app.options.messageSampleSize <= Object.keys(app.activeChat.messageBuffer).length)){
+                loadingMessages = true;
+
+                app.messageOffset += app.options.messageSampleSize;
+                await app.ui.fetchMessages()
+
+                loadingMessages = false
+
                 console.log("Should load more");
             }
         })

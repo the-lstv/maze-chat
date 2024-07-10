@@ -1,8 +1,18 @@
 <body>
     <script>
         if(location.search == "?result=success" && location.hash.startsWith("#")){
+            // I KNOW this is BAD, *VERY* BAD, but shut up ill fix it someday lol
             localStorage["==temporary.2226b75"] = location.hash.replace("#", "")
-            location.replace("/")
+
+            (async function(){
+                await fetch("http://api.extragon.test/v2/mazec/create_profile/", {
+                    headers: {
+                        Authorization: location.hash.replace("#", "")
+                    }
+                })
+
+                location.replace("/")
+            })()
         } else {
             alert(`An error occured while trying to log in (i was lazy to do it properly so here's the whole thing we know: ${location.search})`)
         }
