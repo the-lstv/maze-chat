@@ -2,7 +2,7 @@
     <script>
         if(location.search == "?result=success" && location.hash.startsWith("#")){
             // I KNOW this is BAD, *VERY* BAD, but shut up ill fix it someday lol
-            localStorage["==temporary.2226b75"] = location.hash.replace("#", "")
+            localStorage["==temporary.2226b75"] = location.hash.replace("#", "");
 
             (async function(){
                 await fetch("http://api.extragon.test/v2/mazec/create_profile/", {
