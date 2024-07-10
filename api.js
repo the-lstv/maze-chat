@@ -189,7 +189,7 @@ API = {
                     latest_client: "0.2.0",
                     lowest_client: "0.1.9",
                     sockets: [
-                        `ws${req.secure? "s": ""}://${req.domain}/v2/mazec/`
+                        `ws${req.secured? "s": ""}://${req.domain}/v2/mazec/`
                     ]
                 }))
                 // todo: implement fast_stringify, possibly change things around
