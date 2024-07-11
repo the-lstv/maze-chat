@@ -6,6 +6,8 @@
 
             (async function(){
                 await fetch("https://api.extragon.cloud/v2/mazec/create_profile/", {
+                    method: "POST",
+                    body: "{}",
                     headers: {
                         Authorization: location.hash.replace("#", "")
                     }

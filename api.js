@@ -230,26 +230,34 @@ API = {
 
                 switch(shift()){
                     case "create_profile":
-                        if(typeof req.body !== "object" || !req.body.displayname){
-                            return error(2)
-                        }
+                        req.parseBody(async (data, fail) => {
+                            if(fail){
+                                return error(fail)
+                            }
 
-                        let row = await mazeDatabase.table("chat.profiles").has("link", User.id);
+                            data = data.json;
 
-                        if(row.err) return error(row.err);
+                            if(typeof data !== "object"){
+                                return error(2)
+                            }
 
-                        if(row.result.length < 1) {
-                            let thing = await mazeDatabase.table("chat.profiles").insert({
-                                ...req.body,
-                                link: User.id
-                            })
+                            let row = await mazeDatabase.table("chat.profiles").has("link", User.id);
 
-                            if(thing.err) return error(thing.err);
+                            if(row.err) return error(row.err);
 
-                            res.send(`{"success":true}`)
-                        } else {
-                            error("Profile for this user was already created. Did you mean to use \"patch\"?")
-                        }
+                            if(row.result.length < 1) {
+                                let thing = await mazeDatabase.table("chat.profiles").insert({
+                                    ...data,
+                                    link: User.id
+                                })
+
+                                if(thing.err) return error(thing.err);
+
+                                res.send(`{"success":true}`)
+                            } else {
+                                error("Profile for this user was already created. Did you mean to use \"patch\"?")
+                            }
+                        }).data()
                     break;
 
                     case "patch":
@@ -475,15 +483,39 @@ API = {
                                 if(!id){
                                     return error(2)
                                 }
+
                                 response = await mazeDatabase.query(`select * from \`chat.rooms\` where id=? LIMIT 1`, [id])
 
-                                if(!response.err){
-                                    res.send(JSON.stringify(response.result[0]))
-                                } else {
-                                    // reply.asd = response.err
+                                if(response.err){
                                     console.log(response.err);
                                     return error(24)
                                 }
+
+                                // TODO: improve, separate, and implement limits/offsets, etc
+
+                                await new Promise(resolve => {
+                                    mazeDatabase.query(
+                                        `select member, isOwner, isBanned, bannedUntil, memberSince, isMember from \`chat.rooms.members\` WHERE room = ?`,
+                                        [id],
+
+                                        async function(err, results) {
+                                            if(!err){
+
+                                                response = response.result[0]
+
+                                                response.members = results.map(result => {
+                                                    result.isOwner = !!result.isOwner[0]
+                                                    result.isBanned = !!result.isBanned[0]
+                                                    result.isMember = !!result.isMember[0]
+                                                    return result
+                                                })
+
+                                                return res.send(JSON.stringify(response));
+
+                                            } else return error(24), console.log(err);
+                                        }
+                                    )
+                                })
                         }
                     }
             break;

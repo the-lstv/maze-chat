@@ -60,7 +60,7 @@
                 <br><br>
 
                 <ls-box style="display:flex;flex-direction:column">
-                    <a style="display: block; width: 100%" ls-accent="deep-orange" href="http://lstv.test/sso?app=11&ref=https%3A%2F%2Fchat.lstv.space%2Fauth-finish&permissions=16.w"><button style="width: 100%">Login with LSTV</button></a>
+                    <a style="display: block; width: 100%" ls-accent="deep-orange" href="https://lstv.space/sso?app=11&ref=https%3A%2F%2Fchat.lstv.space%2Fauth-finish&permissions=16.w"><button style="width: 100%">Login with LSTV</button></a>
                 </ls-box>
 
                 <br><br>
@@ -106,6 +106,10 @@
             </div>
 
             <div %room>
+                <div %messageLoader>
+                    <div .messageLoader></div>
+                </div>
+
                 <div %messageArea></div>
 
                 <div %messageButtons hidden>
@@ -138,6 +142,12 @@
                             <i .bi-send-fill></i>
                         </div>
                     </ls-group>
+                </div>
+            </div>
+
+            <div %memberList>
+                <div .list-items>
+
                 </div>
             </div>
         </ls-tab>

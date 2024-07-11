@@ -1,11 +1,12 @@
 
 LS.once("app.ready", async function(app) {
     LS.Resize("list", O("#list"), [0, 0, 0, 1], {snap: true})
+    LS.Resize("memberList", O("#memberList"), [0, 0, 1, 0], {snap: true})
 
     LS._topLayer.add(O("#profilePopup"))
 
     M.on("click", (evt)=>{
-        if(!O("#profilePopup").matches(":hover") && app.ui.profileShown && !evt.target.className.includes("maze-message-username") && !evt.target.className.includes("maze-message-avatar")) {
+        if(!O("#profilePopup").matches(":hover") && app.ui.profileShown && !evt.target.className.includes("maze-message-username") && !evt.target.classList.contains("list-item") && !evt.target.className.includes("maze-message-avatar")) {
             O("#profilePopup").hide();
             app.ui.profileShown = false
         }

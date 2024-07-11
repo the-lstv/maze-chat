@@ -25,6 +25,9 @@ M.on("load", async ()=>{
 
         ui: {
             messageScroller: O("#messageArea"),
+            messageLoaderOverlay: O("#messageLoader"),
+
+            memberList: O("#memberList"),
 
             activeMessageElement: null,
             activeMessage: null,
@@ -74,9 +77,11 @@ M.on("load", async ()=>{
             },
 
             async openChat(id){
-                let chat = await Mazec.chat(id)
-
                 if(app.activeChatID == id) return;
+
+                app.ui.fetchMessages(true, true) // Only prepares the view
+
+                let firstLoad = !app.client.chats[id], chat = await Mazec.chat(id)
 
                 app.messageOffset = 0;
                 app.messageScrollOffset = 0
@@ -104,48 +109,84 @@ M.on("load", async ()=>{
 
                 app.ui.fetchMessages(true)
 
-                chat.on("message", async (msg)=>{
-                    if(msg.author === app.client.user.id) {
-                        if(app.awaitingMessage) app.awaitingMessage.remove()
-                        app.awaitingMessage = null
+                if(firstLoad){
+                    chat.on("message", async (msg)=>{
+                        if(msg.author === app.client.user.id) {
+                            if(app.awaitingMessage) app.awaitingMessage.remove()
+                            app.awaitingMessage = null
+                        }
+    
+                        O("#messageArea").add(await app.messageElement(msg))
+                        app.ui.messagesScrollBottom()
+                    })
+    
+                    chat.on("edit", (buffer) => {
+                        let element = chat.messageBuffer[buffer.id].renderBuffer;
+    
+                        if(element){
+                            element.get(".maze-message-text").set(app.renderMarkdown(buffer.text))
+                        }
+                    })
+    
+                    chat.on("delete", (id) => {
+                        let element = chat.messageBuffer[id].renderBuffer;
+    
+                        if(element){
+                            element.remove()
+                        }
+                    })
+    
+                    chat.on("typing", async (id) => {
+                        app.ui.drawTyping()
+                    })
+    
+                    chat.on("typing.stop", async (id) => {
+                        if(app.activeChat.typingUsers.filter(user => user !== app.client.user.id).length < 1) O("#typingUsers").class("hidden")
+                    })
+                }
+
+                app.ui.memberList.get(".list-items").clear();
+
+                ;(async () => {
+                    for(let member of app.activeChat.info.members){
+                        let profile = await Mazec.profile(member.member);
+
+                        console.log(member, profile);
+    
+                        app.ui.memberList.get(".list-items").add(N({
+                            class: "list-item" + (profile.nsfw? " nsfw": ""),
+                            inner: [
+                                N({
+                                    class: "list-avatar",
+                                    inner: N("img", {
+                                        src: app.getAvatar(profile.avatar, 32)
+                                    })
+                                }),
+
+                                N("span", {innerText: profile.displayname})
+                            ],
+                            onclick(){
+                                console.log(member.member);
+                                app.showProfile(member.member)
+                            }
+                        }))
                     }
-
-                    O("#messageArea").add(await app.messageElement(msg))
-                    app.ui.messagesScrollBottom()
-                })
-
-                chat.on("edit", (buffer) => {
-                    let element = chat.messageBuffer[buffer.id].renderBuffer;
-
-                    if(element){
-                        element.get(".maze-message-text").set(app.renderMarkdown(buffer.text))
-                    }
-                })
-
-                chat.on("delete", (id) => {
-                    let element = chat.messageBuffer[id].renderBuffer;
-
-                    if(element){
-                        element.remove()
-                    }
-                })
-
-                chat.on("typing", async (id) => {
-                    app.ui.drawTyping()
-                })
-
-                chat.on("typing.stop", async (id) => {
-                    if(app.activeChat.typingUsers.filter(user => user !== app.client.user.id).length < 1) O("#typingUsers").class("hidden")
-                })
+                })();
 
                 app.ui.messagesScrollBottom()
                 app.ui.drawTyping()
             },
 
-            async fetchMessages(clear){
+            async fetchMessages(clear, prepareOnly){
                 if(app.messageOffset >= app.messageOffsetMax) return;
 
-                if (clear) for(let element of O("#messageArea").getAll(".maze-message")) element.remove();
+                if (clear) {
+                    for(let element of O("#messageArea").getAll(".maze-message")) element.remove();
+                    app.ui.messageLoaderOverlay.style.display = "flex"
+                }
+
+                if(prepareOnly) return;
+
                 let data = await app.activeChat.get(app.options.messageSampleSize, app.messageOffset),
                     originalScrollHeight = app.ui.messageArea.scrollHeight,
                     originalScrollOffset = app.ui.messageArea.scrollTop
@@ -162,6 +203,8 @@ M.on("load", async ()=>{
                         app.ui.messageArea.add(element)
                     }
                 }
+
+                app.ui.messageLoaderOverlay.style.display = "none"
 
                 app.ui.messageArea.scrollTop = originalScrollOffset + (app.ui.messageArea.scrollHeight - originalScrollHeight)
             },
@@ -441,7 +484,7 @@ M.on("load", async ()=>{
         },
 
         getAvatar(hash, size = 80){
-            return "https://cdn.extragon.cloud/file/" + (hash || "826ddb1ccc499d49186262e4c8d6b53e.svg") + "?size=" + size
+            return "https://cdn.extragon.cloud/file/" + (hash || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (hash.endsWith("svg")? "" : "?size=" + size)
         },
 
         async showProfile(id){
