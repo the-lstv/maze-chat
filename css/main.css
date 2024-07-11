@@ -465,6 +465,7 @@ ls-tab.tab-active {
 
 .profile-bio {
     user-select: text;
+    white-space: pre-wrap;
 }
 
 .profile-bio h3 {
