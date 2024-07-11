@@ -400,24 +400,33 @@ API = {
                                     if(data.text) patch.text = "" + data.text + "";
                                     if(data.mentions) patch.mentions = data.mentions;
                                     if(data.attachments) patch.attachments = data.attachments;
-    
+
                                     response = await mazeDatabase.table("chat.messages").update("where id=" + (+data.id), patch)
-                                    
+
                                     if(!response.err){
-                                        for(let v of Object.values(clients)){
-                                            if(v.listeners.message.includes(id)){
-                                                v.write([
-                                                    eventList.get("edit"),
-                                                    id,
-                                                    (+data.id),
-                                                    (patch.text || ""),
-                                                    (patch.mentions || "").replace(/[\[\]]/g, ""),
-                                                    (patch.attachments || "").replace(/[\[\]]/g, "")
-                                                ])
-                                            }
-                                        }
+                                        // for(let v of Object.values(clients)){
+                                        //     if(v.listeners.message.includes(id)){
+                                        //         v.write([
+                                        //             eventList.get("edit"),
+                                        //             id,
+                                        //             (+data.id),
+                                        //             (patch.text || ""),
+                                        //             (patch.mentions || "").replace(/[\[\]]/g, ""),
+                                        //             (patch.attachments || "").replace(/[\[\]]/g, "")
+                                        //         ])
+                                        //     }
+                                        // }
+
+                                        backend.broadcast(`maze.chatMessages.${id}`, A2U8([
+                                            eventList.get("edit"),
+                                            id,
+                                            (+data.id),
+                                            (patch.text || ""),
+                                            (patch.mentions || "").replace(/[\[\]]/g, ""),
+                                            (patch.attachments || "").replace(/[\[\]]/g, "")
+                                        ]), true, true)
     
-                                        send({success: true});
+                                        res.send(`{"success":true}`);
                                     } else {
                                         return error(24)
                                     }

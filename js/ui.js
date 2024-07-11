@@ -14,25 +14,24 @@ LS.once("app.ready", async function(app) {
 
     await M.Script("https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js");
     await M.Script("https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/markdown/markdown.min.js");
+
     M.Style("https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css");
 
-    app.ui.messageContent = CodeMirror(O('#messageContent'), {
+    let messageEditorConfig = {
         mode: 'markdown',
         theme: 'borderline',
         lineWrapping: true,
-        extraKeys: {
-            'Enter': function(cm) {
-                app.ui.send()
+    }
 
-                const cursor = cm.getCursor();
-                const line = cm.getLine(cursor.line);
+    function initializeEditor(element, config, isMain = false){
+        O(element);
 
-                if (cm.state.keySeq == 'Shift-Enter') {
-                    cm.replaceRange('\n', cursor);
-                }
-            }
-        }
-    });
+        let instance = CodeMirror(element, config);
+        element.class("editor")
+        instance.on('renderLine', (instance, line, element) => editorOnRenderLine(instance, line, element, isMain));
+        instance.on('change', () => editorOnChange(isMain));
+        return instance
+    }
 
     // Emoji Rendering
 
@@ -64,19 +63,51 @@ LS.once("app.ready", async function(app) {
 
     let postEvent = false;
 
-    app.ui.messageContent.on('renderLine', (instance, line, element) => {
+    function editorOnRenderLine(instance, line, element, isMain) {
         if(postEvent) return postEvent = false; else renderEmojis(instance, line);
-    });
+    }
 
-    app.ui.messageContent.on('change', () => {
+    function editorOnChange(isMain) {
         let value = app.ui.messageContent.doc.getValue();
 
         if(app.activeChat){
-            localStorage["maze.previousContent." + app.activeChat.id] = value
+            if(isMain) localStorage["maze.previousContent." + app.activeChat.id] = value;
 
             if(value.length > 0) app.activeChat.sendTyping()
         }
-    });
+    }
+
+    app.ui.messageContent = initializeEditor(O('#messageContent'), {...messageEditorConfig, extraKeys: {
+        'Enter': function(cm) {
+            const cursor = cm.getCursor();
+
+            if (cm.state.keySeq == 'Shift-Enter') {
+                cm.replaceRange('\n', cursor);
+            } else app.ui.send();
+        }
+    }}, true)
+
+    app.ui.messageEditContent = initializeEditor(O('#messageEditContent'), {...messageEditorConfig, extraKeys: {
+        'Enter': function(cm) {
+            const cursor = cm.getCursor();
+
+            if (cm.state.keySeq == 'Shift-Enter') {
+                cm.replaceRange('\n', cursor);
+            } else {
+                // Edit message
+
+                let value = app.ui.messageEditContent.doc.getValue();
+
+                if(value.length > 0) app.activeChat.message(app.ui.editingMessage.id).edit(value);
+                else app.activeChat.message(app.ui.editingMessage.id).delete();
+
+                app.ui.editingMessageStopEdit()
+            }
+        },
+        'Esc': function() {
+            app.ui.editingMessageStopEdit()
+        }
+    }})
 })
 
 // let element = O(messageContent), textInput = O(hiddenTextarea);

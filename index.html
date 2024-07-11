@@ -12,8 +12,8 @@
         js: /js/client.js, /js/ui.js, /js/app.js, https://cdn.jsdelivr.net/npm/vscroll, https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js;
         css: /css/main.css, /css/format.css;
 
-        ls-js: tiny, select, color,tabs, drag, steps, form, resize, tooltips;
-        ls-css: base, ls-flat, select, tabs, resize, tooltips;
+        ls-js: tiny, color, tabs, resize, tooltips, toast, nav;
+        ls-css: base, ls-flat, tabs, resize, tooltips, toast, nav;
 
         fonts: Montserrat, "JetBrains Mono";
 
@@ -77,75 +77,81 @@
 
         </ls-tab>
 
-
-        <ls-tab %intro-config .intro>
-            <!-- <ls-steps>
-                <div class="container" style="font-size:small">
-                    <ls-step>
-                        <h1 style=display:block;text-align:center>Let’s set some basics.</h1>
-                        <div id="intro-theme"></div>
-                    </ls-step>
-                    <ls-step>
-                        <h1 style=display:block;text-align:center>Let’s set some basics.</h1>
-                        <div id="intro-layout"></div>
-                    </ls-step>
-                </div>
-                <div class="bottom">
-                    <button id="c-next-d" style="font-size:2em" class="pill desktop">Next <i class="bi-chevron-right"></i></button>
-                    <button id="c-next-m" style="font-size:1.5em" class="circle mobile"><i class="bi-chevron-right"></i></button>
-                </div>
-            </ls-steps> -->
+        <ls-tab %settings>
+            <h1><i .bi-sign-turn-left-fill></i> work in progress</h1>
+            <button onclick="app.screen.setActive('home')">go back</button>
         </ls-tab>
-
 
         <ls-tab %home>
             <div %list>
                 <div .list-items>
+    
+                </div>
 
+                <div %profileBar>
+                    <div .list-item onclick='app.showProfile(app.client.user.id, this.getBoundingClientRect().left + 15, this.getBoundingClientRect().top - (O("#profilePopup").getBoundingClientRect().height || 480) - 15)'>
+                        <div .list-avatar></div>
+                        <span .profileBarName></span>
+                    </div>
+                    <div .profileBarButtons>
+                        <div ls-tooltip="Settings" onclick="app.screen.setActive('settings')" .list-item><i .bi-gear-fill></i></div>
+                    </div>
                 </div>
             </div>
 
-            <div %room>
-                <div %messageLoader>
-                    <div .messageLoader></div>
-                </div>
+            <ls-tabs %homeContents>
+                <ls-tab %noChannel>
+                    <i .bi-chat-dots></i>
+                    <br>
+                    <h3>Select a channel to start chatting!</h3>
+                </ls-tab>
 
-                <div %messageArea></div>
-
-                <div %messageButtons hidden>
-                    <div .messageButton ls-tooltip="React" .messageReactButton><i .bi-emoji-smile-fill></i></div>
-                    <div .messageButton ls-tooltip="Reply" .messageReplyButton><i .bi-reply-fill></i></div>
-                    <div .messageButtonGroup .ownMessageButtons>
-                        <div onclick="app.ui.activeMessageEdit()" .messageButton ls-tooltip="Edit" .messageEditButton><i .bi-pencil-fill></i></div>
-                        <div onclick="app.ui.activeMessageDelete()" .messageButton ls-tooltip="Delete" .messageDeleteButton><i .bi-trash-fill></i></div>
+                <ls-tab %room>
+                    <div %messageLoader>
+                        <div .messageLoader></div>
                     </div>
-                </div>
-
-                <div %writingArea>
-                    <div %typingUsers .hidden>
-                        <div .typingDots></div>
-                        <div .typingUsersText></div>
+    
+                    <div %messageArea></div>
+    
+                    <div %messageButtons hidden>
+                        <div onclick='LS.Toast.show("This feature is not implemented yet!", {accent: "red", timeout: 2000})' .messageButton ls-tooltip="React" .messageReactButton><i .bi-emoji-smile-fill></i></div>
+                        <div onclick='LS.Toast.show("This feature is not implemented yet!", {accent: "red", timeout: 2000})' .messageButton ls-tooltip="Reply" .messageReplyButton><i .bi-reply-fill></i></div>
+                        <div onclick="app.ui.activeMessageCopy()" .messageButton ls-tooltip="Copy text" .messageCopyButton><i .bi-clipboard-fill></i></div>
+                        <div onclick="app.ui.activeMessageCopyID()" .messageButton ls-tooltip="Copy message ID" .messageCopyButton><i .bi-clipboard-data></i></div>
+                        <div .messageButtonGroup .ownMessageButtons>
+                            <div onclick="app.ui.activeMessageEdit()" .messageButton ls-tooltip="Edit" .messageEditButton><i .bi-pencil-fill></i></div>
+                            <div onclick="app.ui.activeMessageDelete()" .messageButton ls-tooltip="Delete" .messageDeleteButton><i .bi-trash-fill></i></div>
+                        </div>
                     </div>
-
-                    <ls-group join %messageBox>
-                        <div role="button" .messageBoxButton>
-                            <i .bi-plus-circle-fill></i>
+    
+                    <div %writingArea>
+                        <div %typingUsers .hidden>
+                            <div .typingDots></div>
+                            <div .typingUsersText></div>
                         </div>
+    
+                        <ls-group join %messageBox>
+                            <div role="button" .messageBoxButton>
+                                <i .bi-plus-circle-fill></i>
+                            </div>
+    
+                            <div %messageContent></div>
+    
+                            <div title="Emoji picker" role="button" onclick="app.ui.emojiPicker()" .messageBoxButton>
+                                <i .bi-emoji-laughing-fill></i>
+                            </div>
+    
+                            <div title="Send message" role="button" onclick="app.ui.send()" .messageBoxButton .sendButton>
+                                <i .bi-send-fill></i>
+                            </div>
+                        </ls-group>
+                    </div>
+        
+                </ls-tab>
 
-                        <div placeholder="Enter message" %messageContent></div>
+            </ls-tabs>
 
-                        <div title="Emoji picker" role="button" onclick="app.ui.emojiPicker()" .messageBoxButton>
-                            <i .bi-emoji-laughing-fill></i>
-                        </div>
-
-                        <div title="Send message" role="button" onclick="app.ui.send()" .messageBoxButton .sendButton>
-                            <i .bi-send-fill></i>
-                        </div>
-                    </ls-group>
-                </div>
-            </div>
-
-            <div %memberList>
+            <div %memberList style="display: none">
                 <div .list-items>
 
                 </div>
@@ -154,19 +160,30 @@
 
     </main>
 
-    <div %assets hidden style="display: none">
+    <div %assets hidden>
         <div %profilePopup .profile-view hidden>
-            <div class="profile-banner">
+            <ls-box ls-tooltip="This account belongs to a bot" .color .bot-tag .profile-bot-badge accent="blue"><i .bi-robot></i> BOT</ls-box>
+
+            <div .profile-banner>
                 <img draggable="false">
                 <video loop autoplay muted></video>
             </div>
-            <div class="profile-avatar">
+
+            <div .profile-avatar>
                 <img draggable="false">
             </div>
-            <div class="profile-box">
-                <h2 class="profile-name"></h2>
-                <div class="profile-bio"></div>
+
+            <div .profile-box>
+                <h2 .profile-name></h2>
+                <div .profile-bio></div>
             </div>
+        </div>
+
+        <div %messageEditPanel>
+            <div %messageEditContent></div>
+            <span style="color: gray; font-size: small; display: inline-block; padding: 4px 10px;">
+                escape to cancel, enter to confirm
+            </span>
         </div>
     </div>
 

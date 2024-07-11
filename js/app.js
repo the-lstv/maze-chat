@@ -12,6 +12,11 @@ M.on("load", async ()=>{
             list: false
         }),
 
+        channelContent: LS.Tabs("homeContents", "#homeContents", {
+            // mode: "presentation",
+            list: false
+        }),
+
         options: {
             messageSampleSize: 50
         },
@@ -79,6 +84,8 @@ M.on("load", async ()=>{
             },
 
             async openChat(id){
+                app.channelContent.setActive("room")
+                app.ui.editingMessageStopEdit() // Todo: Save progress state
 
                 if(app.activeChatID == id) return;
 
@@ -129,6 +136,7 @@ M.on("load", async ()=>{
     
                         O("#messageArea").add(await app.messageElement(msg))
                         app.ui.messagesScrollBottom()
+                        app.ui.condenseMessages(0, 5)
                     })
     
                     chat.on("edit", (buffer) => {
@@ -175,7 +183,7 @@ M.on("load", async ()=>{
                                 N("span", {innerText: profile.displayname}),
 
                                 ...profile.bot? [
-                                    N("ls-box", {class: "inline color", accent: "blue", inner: "BOT"})
+                                    N("ls-box", {class: "inline color bot-tag", accent: "blue", inner: "BOT"})
                                 ]: []
                             ],
                             onclick(){
@@ -246,13 +254,37 @@ M.on("load", async ()=>{
                 if(!app.ui.activeMessageElement) return O("#messageButtons").applyStyle({display: "none"});
 
                 O("#messageButtons").applyStyle({
-                    top: app.ui.activeMessageElement.getBoundingClientRect().top + "px",
+                    top: (app.ui.activeMessageElement.getBoundingClientRect().top - 30) + "px",
                     display: "flex"
                 })
             },
 
             activeMessageEdit(){
+                if(app.ui.editingMessage){
+                    app.ui.editingMessageStopEdit()
+                }
 
+                app.ui.editingMessage = app.ui.activeMessage;
+                app.ui.editingMessage.renderBuffer.get(".maze-message-text").hide()
+                app.ui.editingMessage.renderBuffer.add(O("#messageEditPanel"))
+                app.ui.messageEditContent.doc.setValue(app.ui.editingMessage.text)
+                app.ui.messageEditContent.focus()
+            },
+
+            editingMessageStopEdit(){
+                if(!app.ui.editingMessage) return;
+
+                O("#assets").add(O('#messageEditPanel'))
+                app.ui.editingMessage.renderBuffer.get(".maze-message-text").show()
+                app.ui.editingMessage = null;
+            },
+
+            activeMessageCopy(){
+                LS.Util.copy(app.activeChat.message(app.ui.activeMessage.id).buffer.text)
+            },
+
+            activeMessageCopyID(){
+                LS.Util.copy(app.activeChat.message(app.ui.activeMessage.id).buffer.id)
             },
 
             activeMessageDelete(){
@@ -460,7 +492,10 @@ M.on("load", async ()=>{
                         ...profile.nsfw? [
                             N({inner: "NSFW", tooltip: "This profile may include NSFW imagery.<br>Click to change how this content is displayed", class: "maze-nsfw-badge", onclick(){ app }}),
                         ] : [],
-                        N({innerText: app.ui.timeFormat(messageBuffer.timestamp).replace(",", ""), class: "maze-message-timestamp"}),
+                        ...profile.bot? [
+                            N("ls-box", {class: "inline color bot-tag", accent: "blue", inner: "BOT"})
+                        ]: [],
+                        N({innerText: app.ui.timeFormat(messageBuffer.timestamp, true).replace(",", ""), class: "maze-message-timestamp"}),
                     ], class: "maze-message-author"}),
 
                     N({
@@ -511,7 +546,7 @@ M.on("load", async ()=>{
             return "https://cdn.extragon.cloud/file/" + (hash || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!hash || hash.endsWith("svg")? "" : "?size=" + size)
         },
 
-        async showProfile(id, x = M.x){
+        async showProfile(id, x = M.x, y = M.y){
             let container = O("#profilePopup");
             LS._topLayerInherit()
 
@@ -523,7 +558,7 @@ M.on("load", async ()=>{
             
             container.applyStyle({
                 left: Math.min(x, innerWidth - container.getBoundingClientRect().width - 20) +"px",
-                top: Math.min(M.y, innerHeight - container.getBoundingClientRect().height - 20) +"px"
+                top: Math.min(y, innerHeight - container.getBoundingClientRect().height - 20) +"px"
             })
 
             container.get(".profile-avatar img").onload = ()=>{
@@ -538,6 +573,9 @@ M.on("load", async ()=>{
             ]: "");
 
             container.get(".profile-name").set(profile.displayname);
+            
+            container.get(".profile-bot-badge").style.display = profile.bot? "inline-block": "none";
+
             container.get(".profile-avatar img").src = app.getAvatar(profile.avatar, 256);
 
             container.getAll(".profile-banner :is(video, img)").all().applyStyle({display: "none"})
@@ -563,6 +601,7 @@ M.on("load", async ()=>{
 
     tabs.setActive(token? 'home' : 'login');
 
+    // Startup
     if(token) {
         let login = await app.client.login(token)
 
@@ -580,14 +619,13 @@ M.on("load", async ()=>{
             return
         }
 
-
         let channels = await Mazec.listChannels();
 
         for(let channel of channels){
             if(!channel.isMember) continue;
 
             O("#list .list-items").add(N({
-                class: "list-item",
+                class: "list-item channel",
                 inner: [
                     N("i", {class: "bi-hash"}),
                     N("span", {
@@ -601,6 +639,19 @@ M.on("load", async ()=>{
             }))
         }
 
+        // Set profile information
+
+        let profile = await app.client.profile(app.client.user.id), profileBar = O("#profileBar");
+        
+        profileBar.get(".list-avatar").set(N("img", {
+            src: app.getAvatar(profile.avatar, 32)
+        }))
+
+        profileBar.get(".profileBarName").set(N({innerText: profile.displayname}))
+
+        app.channelContent.on("tab_changed", (id, name) => {
+            O("#memberList").style.display = name == "room"? "flex": "none";
+        })
 
         // Load more messages when scrolling
 
@@ -619,6 +670,8 @@ M.on("load", async ()=>{
                 console.log("Should load more");
             }
         })
+
+        O("#messageButtons").on("click", () => O("#messageButtons").applyStyle({display: "none"}))
     }
 
     LS.invoke("app.ready", app);
