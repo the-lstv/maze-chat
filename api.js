@@ -385,15 +385,13 @@ API = {
 
                                 req.parseBody(async (data, fail) => {
                                     if(fail){
-                                        error(fail)
-                                        return send()
+                                        return error(fail)
                                     }
 
                                     data = data.json;
 
                                     if(typeof data !== "object" || !data.text || !data.id || !id){
-                                        error(2)
-                                        return send()
+                                        return error(2)
                                     }
 
                                     let patch = {
@@ -441,15 +439,13 @@ API = {
 
                                 req.parseBody(async (data, fail) => {
                                     if(fail){
-                                        error(fail)
-                                        return send()
+                                        return error(fail)
                                     }
 
                                     data = data.json;
 
                                     if(typeof data !== "object" || !data.id || !id){
-                                        error(2)
-                                        return send()
+                                        return error(2)
                                     }
 
                                     let patch = {
@@ -552,8 +548,7 @@ API = {
 
                 req.parseBody(async (data, fail) => {
                     if(fail){
-                        error(fail)
-                        return send()
+                        return error(fail)
                     }
 
                     data = data.json;
@@ -612,8 +607,7 @@ API = {
 
                 req.parseBody(async (data, fail) => {
                     if(fail){
-                        error(fail)
-                        return send()
+                        return error(fail)
                     }
 
                     data = data.json;

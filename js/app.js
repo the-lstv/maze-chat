@@ -131,7 +131,9 @@ M.on("load", async ()=>{
                 app.ui.fetchMessages(true)
 
                 if(firstLoad){
-                    chat.on("message", async (msg)=>{
+                    chat.on("message", async (msg) => {
+                        if(app.activeChat.id !== chat.id) return;
+
                         if(msg.author === app.client.user.id) {
                             if(app.awaitingMessage) app.awaitingMessage.remove()
                             app.awaitingMessage = null
@@ -143,6 +145,8 @@ M.on("load", async ()=>{
                     })
     
                     chat.on("edit", (buffer) => {
+                        if(app.activeChat.id !== chat.id) return;
+
                         let element = chat.messageBuffer[buffer.id].renderBuffer;
     
                         if(element){
@@ -151,6 +155,8 @@ M.on("load", async ()=>{
                     })
     
                     chat.on("delete", (id) => {
+                        if(app.activeChat.id !== chat.id) return;
+
                         let element = chat.messageBuffer[id].renderBuffer;
     
                         if(element){
@@ -159,14 +165,20 @@ M.on("load", async ()=>{
                     })
     
                     chat.on("typing", async (id) => {
+                        if(app.activeChat.id !== chat.id) return;
+
                         app.ui.drawTyping()
                     })
     
-                    chat.on("typing.stop", async (id) => {
+                    chat.on("typing.stop", async () => {
+                        if(app.activeChat.id !== chat.id) return;
+
                         if(chat.typingUsers.filter(user => user !== app.client.user.id).length < 1) O("#typingUsers").class("hidden")
                     })
 
                     chat.on("member.join", async (id) => {
+                        if(app.activeChat.id !== chat.id) return;
+
                         app.ui.renderMembers()
                     })
                 }
