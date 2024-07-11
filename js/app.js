@@ -1,4 +1,4 @@
-LS.Color.watchScheme() // Set light mode if preffered and watch for changes
+// LS.Color.watchScheme() // Set light mode if preffered and watch for changes
 
 let app, tabs, Mazec, chat;
 
