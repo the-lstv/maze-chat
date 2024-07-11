@@ -28,11 +28,11 @@
     <script>
         let client = new MazecClient("https://api.extragon.cloud/v2/mazec");
 
-
         console.log("Starting bot");
 
-        ;(async () => {
-            let fragment = await client.login("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTE5LCJwZXJtaXNzaW9ucyI6IjE2LnciLCJhcHAiOiIxMSIsImlhdCI6MTcyMDcwMDA3MCwiZXhwIjoxNzI1ODg0MDcwfQ.zRczwDS-i6FDyyb5CTXohj01-CFZ_Qt4LXKpM6inQZ0")
+        client.login("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTE5LCJwZXJtaXNzaW9ucyI6IjE2LnciLCJhcHAiOiIxMSIsImlhdCI6MTcyMDcwMDA3MCwiZXhwIjoxNzI1ODg0MDcwfQ.zRczwDS-i6FDyyb5CTXohj01-CFZ_Qt4LXKpM6inQZ0", async fragment => {
+            
+            if(!fragment) throw "Could not log-in";
 
             console.log("Bot logged in as", fragment.id);
 
@@ -43,8 +43,8 @@
             async function listenToChat(id){
                 let chat = await client.chat(id)
     
-                if(chat.error) throw chat.error; // For example, the bot does not have access
-    
+                if(chat.error) throw chat.error; // For example, the bot does not have permissions
+
                 chat.open()
 
                 console.log("Listening to channel", id);
@@ -63,7 +63,7 @@
             for(channel of channels){
                 listenToChat(channel.room)
             }
-        })()
+        })
     </script>
 
     <style>

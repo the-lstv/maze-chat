@@ -12,10 +12,9 @@ client.login("BOT_TOKEN", async fragment => {
 
     if(!fragment) throw "Could not log-in";
 
-    // Fragment now contains details about the user and is ready to be used!
+    console.log("Bot logged in as", fragment.id);
 
-    // Initialize and open connection
-    if(await Mazec.initialize()) throw "Could not initialize:" + error;
+    await client.initialize()
 
     console.log("Bot is connected and running!");
 
@@ -28,10 +27,8 @@ client.login("BOT_TOKEN", async fragment => {
 
     if(chat.error) throw chat.error; // For example, the bot does not have access
 
-
     chat.open() // Subscribe for socket updates (like new messages, edits, etc.)
     // Likewise, we unsub them with chat.close()
-
 
     // You can read messages on demand with chat.get() - either from a certain range and offset or directly fetching a message with its ID.
 
@@ -42,9 +39,6 @@ client.login("BOT_TOKEN", async fragment => {
     }
 
     console.log(" == Now listening to new events ==");
-
-
-
 
 
 
@@ -74,6 +68,8 @@ client.login("BOT_TOKEN", async fragment => {
         console.log(`All users stopped typing in the channel`);
     })
 
+    // ...
+
     // An array of users who are currently typing in this channel, using the standard 10 second timeout. (including you!)
     chat.typingUsers
 
@@ -83,10 +79,9 @@ client.login("BOT_TOKEN", async fragment => {
 
 
 
-
-
-
     // And there is of course a lot more stuff to do!
+
+    return // FOLLOWING IS NOT FULLY IMPLEMENTED
 
     // - Global notifications
     client.enableNotifications();
