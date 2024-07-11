@@ -12,29 +12,6 @@ LS.once("app.ready", async function(app) {
         }
     })
 
-    // Intro
-    // LS.Steps("intro", "#intro-slideshow ls-steps", {
-    //     buttons: {next: [O("#p-next-d"), O("#p-next-m")], back: false},
-    //     style: "dots",
-    //     clickalbe: true,
-    //     mode: "presentation"
-    // }).on("step_changed", (a,b)=>{
-    //     O("#intro-slideshow ls-steps").attr("ls-accent", O('[tab-id="'+b+'"]').attr("ls-accent") || "blue")
-    // }).on("done", (a,b)=>{
-    //     tabs.setActive("intro-config")
-    // })
-        
-    // LS.Steps("intro-c", "#intro-config ls-steps", {
-    //     buttons: {next: [O("#c-next-d"), O("#c-next-m")], back: false},
-    //     style: "dots",
-    //     clickalbe: true,
-    //     mode: "presentation"
-    // }).on("step_changed", (a,b)=>{
-    //     O("#intro-config ls-steps").attr("ls-accent", O('[tab-id="'+b+'"]').attr("ls-accent") || "blue")
-    // }).on("done", (a,b)=>{
-    //     tabs.setActive("intro-finish")
-    // })
-
     await M.Script("https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js");
     await M.Script("https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/markdown/markdown.min.js");
     M.Style("https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css");
@@ -42,7 +19,19 @@ LS.once("app.ready", async function(app) {
     app.ui.messageContent = CodeMirror(O('#messageContent'), {
         mode: 'markdown',
         theme: 'borderline',
-        lineWrapping: true
+        lineWrapping: true,
+        extraKeys: {
+            'Enter': function(cm) {
+                app.ui.send()
+
+                const cursor = cm.getCursor();
+                const line = cm.getLine(cursor.line);
+
+                if (cm.state.keySeq == 'Shift-Enter') {
+                    cm.replaceRange('\n', cursor);
+                }
+            }
+        }
     });
 
     // Emoji Rendering
@@ -80,7 +69,13 @@ LS.once("app.ready", async function(app) {
     });
 
     app.ui.messageContent.on('change', () => {
-        if(app.activeChat && app.ui.messageContent.doc.getValue().length > 0) app.activeChat.sendTyping()
+        let value = app.ui.messageContent.doc.getValue();
+
+        if(app.activeChat){
+            localStorage["maze.previousContent." + app.activeChat.id] = value
+
+            if(value.length > 0) app.activeChat.sendTyping()
+        }
     });
 })
 

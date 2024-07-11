@@ -1,0 +1,65 @@
+<head>
+
+    @manifest {
+        title: "Run a bot";
+    }
+
+    @resources {
+        js: /js/client.js;
+        fonts: "JetBrains Mono";
+
+        ls-js: tiny;
+
+        bootstrap-icons;
+    }
+</head>
+
+<body>
+    <div %log></div>
+
+    <script>
+        let _console = console.log;
+        console.log = console.error = console.log = console.debug = function(...data){
+            O("#log").add(N({class: "line", innerText: data.join(" ")}))
+            _console(...data)
+        }
+    </script>
+
+    <script>
+        let client = new MazecClient("http://api.extragon.test/v2/mazec");
+
+
+        console.log("Starting bot");
+
+        ;(async () => {
+            let fragment = await client.login("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTE5LCJwZXJtaXNzaW9ucyI6IjE2LnciLCJhcHAiOiIxMSIsImlhdCI6MTcyMDcwMDA3MCwiZXhwIjoxNzI1ODg0MDcwfQ.zRczwDS-i6FDyyb5CTXohj01-CFZ_Qt4LXKpM6inQZ0")
+
+            console.log("Bot logged in as", fragment.id);
+
+            await client.initialize()
+
+            console.log("Bot is connected and running!");
+
+            let chat = await client.chat(13)
+
+            if(chat.error) throw chat.error; // For example, the bot does not have access
+
+            chat.open()
+
+            chat.on("message", async message => {
+                console.log("Received message:", message.text);
+
+                if(message.text == "ping"){
+                    chat.send("pong")
+                }
+            })
+
+        })()
+    </script>
+
+    <style>
+        :root {
+            font-family: "JetBrains Mono";
+        }
+    </style>
+</body>

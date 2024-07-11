@@ -247,6 +247,14 @@
                 }
             }
 
+            traverseLocal(from, limit, callback){
+                let keys = Object.keys(_this.messageBuffer).reverse();
+
+                for(let i = from; i < limit + from; i++){
+                    callback(_this.messageBuffer[keys[i]], i, _this.messageBuffer[keys[i + 1]])
+                }
+            }
+
             message(id){
                 let tools;
 
@@ -519,7 +527,7 @@
                     return `Mazec client is too outdated (minimum supported is ${conn.lowest_client}, current is ${version})`
                 }
     
-                let profile = await Mazec.profile();
+                let profile = await _this.profile(conn.user_fragment.id);
                 _this.profileCache[conn.user_fragment.id] = profile;
 
                 if(!profile){
@@ -532,27 +540,45 @@
                 await _this.ensureSocket()
                 return
             }
-    
-            async profile(id = "me", refresh){
-                if(id == "me") id = this.user.id;
-                id = +id;
-    
-                if(isNaN(id)) throw new Error("ID must be a number");
-    
-                if(refresh || !this.profileCache[id]){
-                    let data = await _this.request("/user/profile/" + id).json();
-                    if(data.created === false || !data.displayname){
-                        return null
+
+            async prefetchProfiles(list = []){
+                if(list.length < 1) return;
+
+                list = list.map(id => +id).filter(_ => typeof id !== "number" && !isNaN(_));
+
+                let missingList = list.filter(id => !_this.profileCache[id]), result = [];
+
+                if(missingList.length > 0){
+                    let data = await _this.request("/user/profile/" + missingList.join(",")).json();
+
+                    if(!Array.isArray(data)) throw "Failed fetching profiles " + missingList.join(", ");
+                    
+                    for(let profile of data){
+                        if(typeof profile !== "object" || profile.created === false){
+                            result.push(profile)
+                            continue
+                        }
+                        
+                        profile.created = true
+                        profile.colors = profile.colors.split(",").map(color => window.C? C(color): color)
+        
+                        _this.profileCache[profile.id] = profile
                     }
-    
-                    data.colors = data.colors.split(",").map(color => window.C? C(color): color)
-    
-                    this.profileCache[id] = data
+
+                }
+
+                for(let user of list){
+                    if(_this.profileCache[user]) result.push(_this.profileCache[user] || null)
                 }
     
-                return this.profileCache[id]
+                return result
             }
-    
+
+            async profile(id = "me"){
+                if(id == "me") id = this.user.id;
+                return (await _this.prefetchProfiles([id]))[0]
+            }
+
             async profileSetup(){
                 
             }

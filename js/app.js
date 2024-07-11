@@ -39,7 +39,7 @@ M.on("load", async ()=>{
             async send(){
                 if(app.awaitingMessage) return;
 
-                let content = app.ui.messageContent.doc.getValue();
+                let content = app.ui.messageContent.doc.getValue().trim();
                 if(content.length < 1) return;
                 
                 // Fake placeholder:
@@ -56,6 +56,8 @@ M.on("load", async ()=>{
                 app.ui.messagesScrollBottom()
 
                 let promise = app.activeChat.send(content)
+
+                localStorage["maze.previousContent." + app.activeChat.id] = ""
 
                 setTimeout(async () => {
                     if(!app.awaitingMessage) return;
@@ -77,11 +79,20 @@ M.on("load", async ()=>{
             },
 
             async openChat(id){
+
                 if(app.activeChatID == id) return;
+
+                app.activeChatID = null;
+                if(localStorage.hasOwnProperty("maze.previousContent." + id)){
+                    app.ui.messageContent.doc.setValue(localStorage["maze.previousContent." + id])
+                }
 
                 app.ui.fetchMessages(true, true) // Only prepares the view
 
                 let firstLoad = !app.client.chats[id], chat = await Mazec.chat(id)
+
+                // Pre-fetch all profiles that are a part of the chat
+                await app.client.prefetchProfiles(chat.info.members.map(member => member.member))
 
                 app.messageOffset = 0;
                 app.messageScrollOffset = 0
@@ -141,17 +152,15 @@ M.on("load", async ()=>{
                     })
     
                     chat.on("typing.stop", async (id) => {
-                        if(app.activeChat.typingUsers.filter(user => user !== app.client.user.id).length < 1) O("#typingUsers").class("hidden")
+                        if(chat.typingUsers.filter(user => user !== app.client.user.id).length < 1) O("#typingUsers").class("hidden")
                     })
                 }
 
                 app.ui.memberList.get(".list-items").clear();
 
                 ;(async () => {
-                    for(let member of app.activeChat.info.members){
+                    for(let member of chat.info.members){
                         let profile = await Mazec.profile(member.member);
-
-                        console.log(member, profile);
     
                         app.ui.memberList.get(".list-items").add(N({
                             class: "list-item" + (profile.nsfw? " nsfw": ""),
@@ -163,11 +172,15 @@ M.on("load", async ()=>{
                                     })
                                 }),
 
-                                N("span", {innerText: profile.displayname})
+                                N("span", {innerText: profile.displayname}),
+
+                                ...profile.bot? [
+                                    N("ls-box", {class: "inline color", accent: "blue", inner: "BOT"})
+                                ]: []
                             ],
                             onclick(){
-                                console.log(member.member);
-                                app.showProfile(member.member)
+                                console.log(this.getBoundingClientRect().left);
+                                app.showProfile(member.member, this.getBoundingClientRect().left - (O("#profilePopup").getBoundingClientRect().width || 320) - 15)
                             }
                         }))
                     }
@@ -203,6 +216,8 @@ M.on("load", async ()=>{
                         app.ui.messageArea.add(element)
                     }
                 }
+
+                app.ui.condenseMessages(app.messageOffset - 5, app.options.messageSampleSize)
 
                 app.ui.messageLoaderOverlay.style.display = "none"
 
@@ -269,6 +284,23 @@ M.on("load", async ()=>{
                 }
 
                 return new Intl.DateTimeFormat('en-US', options).format(new Date(timestamp));
+            },
+
+            condenseMessages(from, limit){
+
+                app.activeChat.traverseLocal(from, limit, (thisBuffer, i, nextBuffer) => {
+                    if(!thisBuffer) return;
+
+                    let condense = !!nextBuffer && nextBuffer.author === thisBuffer.author && (thisBuffer.timestamp - nextBuffer.timestamp) < 300000;
+                    if(thisBuffer.renderBuffer) thisBuffer.renderBuffer.class("condensed", condense)
+                })
+                
+                // let list = O("#messageArea").getAll(".maze-message");
+                
+                // for(let i = 0; i < list.length; i++){
+                //     let prevBuffer = i == 0? null : app.activeChat.messageBuffer[list[i-1].messageID];
+                //     let thisBuffer = app.activeChat.messageBuffer[list[i].messageID];
+                // }
             }
         },
 
@@ -279,8 +311,6 @@ M.on("load", async ()=>{
         get activeChat(){
             return app.chats[app.activeChatID]
         },
-
-        prevMessage: null,
 
         htmlUnEscape(text){
             return text.replace(/&amp;|&lt;|&gt;|&quot;|&#39;/g, function (match) {
@@ -414,30 +444,24 @@ M.on("load", async ()=>{
         async messageElement(messageBuffer){
             let profile = await app.client.profile(messageBuffer.author);
 
-            let condensed = app.prevMessage && app.prevMessage.room == messageBuffer.room && app.prevMessage.author == messageBuffer.author && (messageBuffer.timestamp - app.prevMessage.timestamp) < 300000;
-
-            if(!messageBuffer.sent) app.prevMessage = messageBuffer
-
             let messageContent = app.renderMarkdown(messageBuffer.text);
 
             let element = N({
-                class: "maze-message " + (messageBuffer.author == app.client.user.id? "own" : "not-own") + (profile.nsfw? " nsfw": "") + (!condensed? " margin": "") + (messageBuffer.sent? " sent-message-waiting" : ""),
+                class: "maze-message " + (messageBuffer.author == app.client.user.id? "own" : "not-own") + (profile.nsfw? " nsfw": "") + (messageBuffer.sent? " sent-message-waiting" : ""),
                 id: "message-" + messageBuffer.id,
                 inner: [
 
-                    ...condensed? [] : [
-                        N({inner: [
-                            N("img", {src: app.getAvatar(profile.avatar), draggable: false, onload(){ this.parentElement.loading = false }})
-                        ], class: "maze-message-avatar", attr: {"load": "solid"}, onclick(){ app.showProfile(messageBuffer.author) }}),
+                    N({inner: [
+                        N("img", {src: app.getAvatar(profile.avatar), draggable: false, onload(){ this.parentElement.loading = false }})
+                    ], class: "maze-message-avatar", attr: {"load": "solid"}, onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
 
-                        N({inner: [
-                            N({innerText: profile.displayname, class: "maze-message-username", onclick(){ app.showProfile(messageBuffer.author) }}),
-                            ...profile.nsfw? [
-                                N({inner: "NSFW", tooltip: "This profile may include NSFW imagery.<br>Click to change how this content is displayed", class: "maze-nsfw-badge", onclick(){ app }}),
-                            ] : [],
-                            N({innerText: app.ui.timeFormat(messageBuffer.timestamp, !condensed).replace(",", ""), class: "maze-message-timestamp"}),
-                        ], class: "maze-message-author"}),
-                    ],
+                    N({inner: [
+                        N({innerText: profile.displayname, class: "maze-message-username", onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
+                        ...profile.nsfw? [
+                            N({inner: "NSFW", tooltip: "This profile may include NSFW imagery.<br>Click to change how this content is displayed", class: "maze-nsfw-badge", onclick(){ app }}),
+                        ] : [],
+                        N({innerText: app.ui.timeFormat(messageBuffer.timestamp).replace(",", ""), class: "maze-message-timestamp"}),
+                    ], class: "maze-message-author"}),
 
                     N({
                         ...messageBuffer.text.length > 4000 ? {
@@ -475,8 +499,8 @@ M.on("load", async ()=>{
                 }
             })
 
-
             if(messageBuffer.id){
+                element.messageID = messageBuffer.id;
                 (await app.client.chat(messageBuffer.room)).messageBuffer[messageBuffer.id].renderBuffer = element
             }
 
@@ -484,10 +508,10 @@ M.on("load", async ()=>{
         },
 
         getAvatar(hash, size = 80){
-            return "https://cdn.extragon.cloud/file/" + (hash || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (hash.endsWith("svg")? "" : "?size=" + size)
+            return "https://cdn.extragon.cloud/file/" + (hash || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!hash || hash.endsWith("svg")? "" : "?size=" + size)
         },
 
-        async showProfile(id){
+        async showProfile(id, x = M.x){
             let container = O("#profilePopup");
             LS._topLayerInherit()
 
@@ -498,7 +522,7 @@ M.on("load", async ()=>{
             let profile = await app.client.profile(id);
             
             container.applyStyle({
-                left: Math.min(M.x, innerWidth - container.getBoundingClientRect().width - 20) +"px",
+                left: Math.min(x, innerWidth - container.getBoundingClientRect().width - 20) +"px",
                 top: Math.min(M.y, innerHeight - container.getBoundingClientRect().height - 20) +"px"
             })
 
@@ -584,7 +608,7 @@ M.on("load", async ()=>{
         app.ui.messageScroller.on("scroll", async event => {
             O("#messageButtons").applyStyle({display: "none"});
 
-            if(!loadingMessages && app.ui.messageScroller.scrollTop < 50 && (app.options.messageSampleSize <= Object.keys(app.activeChat.messageBuffer).length)){
+            if(app.activeChatID && !loadingMessages && app.ui.messageScroller.scrollTop < 50 && (app.options.messageSampleSize <= Object.keys(app.activeChat.messageBuffer).length)){
                 loadingMessages = true;
 
                 app.messageOffset += app.options.messageSampleSize;

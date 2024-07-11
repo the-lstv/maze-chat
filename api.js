@@ -15,12 +15,15 @@ let enc = new TextEncoder,
         "typing",
         "authorize",
         "edit",
-        "delete"
+        "delete",
+        "status",
     ],
 
 
     profileCache = {}
 ;
+
+let userStatusCache = {};
 
 eventList.get = function(name){
     return eventList[eventList.indexOf(name)]
@@ -248,6 +251,7 @@ API = {
                             if(row.result.length < 1) {
                                 let thing = await mazeDatabase.table("chat.profiles").insert({
                                     ...data,
+                                    created: Date.now(),
                                     link: User.id
                                 })
 
@@ -265,30 +269,36 @@ API = {
                     break;
 
                     case "profile":
-                        user = shift();
+                        let users = shift().split(",").filter(_ => _).map(id => id == "me"? User.id: +id).filter(_ => !isNaN(_)), result = [];
 
-                        if(user == "me" || user == "") user = User.id;
-                        user = +user;
+                        let missingCache = users.filter(_ => !profileCache[_]);
+                    
+                        if(missingCache.length > 0) {
+                            let profiles = await mazeDatabase.query(`SELECT link, displayname, avatar, banner, bio, status, colors, nsfw, bot FROM \`chat.profiles\` WHERE link in (${missingCache.join()})`)
+                            
+                            if(profiles.err) return error(24), console.error(profiles.err);
+    
+                            for(let profile of profiles.result){
+                                profile.bot = !!profile.bot[0]
+                                profile.nsfw = !!profile.nsfw[0]
+    
+                                profile.id = profile.link
+                                delete profile.link
+    
+                                profile.onlineStatus = userStatusCache[profile.id] || 0;
+    
+                                profileCache[profile.id] = profile
+                            }
+                        }
 
-                        if(isNaN(user)) return error(2);
+                        for(let user of users){
+                            if(profileCache[user]) result.push(profileCache[user]); else result.push({
+                                user,
+                                created: false
+                            })
+                        }
 
-                        if(profileCache[user]) return res.send(profileCache[user]);
-                        
-                        let profile = await mazeDatabase.query(`SELECT displayname, avatar, banner, bio, status, colors, nsfw, bot FROM \`chat.profiles\` WHERE link=?`, [user])
-
-                        if(profile.err) return error(profile.err);
-                        
-                        if(profile.result.length < 1) return send({
-                            created: false
-                        })
-                        
-                        profile = profile.result[0];
-
-                        profile.bot = !!profile.bot[0]
-                        profile.nsfw = !!profile.nsfw[0]
-
-                        profileCache[user] = Buffer.from(JSON.stringify(profile))
-                        res.send(profileCache[user])
+                        res.send(Buffer.from(JSON.stringify(result)))
                     break;
                 }
             break;
@@ -630,8 +640,7 @@ API = {
                         // Heartbeat
                         ws.alive = true;
                         ws.write([0])
-                        continue;
-                    break;
+                    continue;
 
                     case "authorize":
                         if(ws.authorized) continue;
@@ -643,6 +652,9 @@ API = {
                         } else {
                             ws.user = user
                             ws.authorized = true
+
+
+                            userStatusCache[user.id] = 1
                         }
                     break;
 

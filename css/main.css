@@ -65,8 +65,12 @@ main {
     padding-left: 4.5em;
 }
 
-.maze-message.margin {
+.maze-message:not(.condensed) {
     margin-top: 1.4em;
+}
+
+.maze-message.condensed :is(.maze-message-avatar, .maze-message-author) {
+    display: none;
 }
 
 [message-style="channel"] .maze-message:hover {
@@ -586,9 +590,15 @@ pre {
     gap: 12px;
 }
 
+#memberList .list-item > * {
+    pointer-events: none;
+}
+
 .list-avatar {
     width: 32px;
+    min-width: 32px;
     height: 32px;
+    min-height: 32px;
     border-radius: 50%;
     overflow: hidden;
     position: relative;
