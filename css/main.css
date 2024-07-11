@@ -685,6 +685,79 @@ pre {
     padding: 8px 15px;
 }
 
+#channelOrganizer {
+    display: flex;
+    flex: 1;
+}
+
+#serverList {
+    overflow-y: auto;
+    background: var(--elevate);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+}
+
+#serverList > hr {
+    width: 74%;
+    margin: 5px 0;
+}
+
+.serverIcon {
+    width: 50px;
+    height: 50px;
+    background-color: var(--elevate-1);
+    /* overflow: hidden; */
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
+    transition: .2s;
+    position: relative;
+    color: var(--accent-light);
+}
+
+.serverIcon > i {
+    font-size: 1.5em;
+}
+
+.serverIcon:hover, .serverIcon.selected {
+    border-radius: 20px;
+}
+
+.serverIcon:hover {
+    color: var(--color-bg);
+    background: var(--accent);
+}
+
+.serverIcon::before {
+    content: "";
+    position: absolute;
+    left: -10px;
+    opacity: 0;
+    transition: .2s;
+    width: 4px;
+    background: var(--color);
+    border-radius: 0 20px 20px 0;
+}
+
+.serverIcon:hover::before {
+    opacity: 1;
+    height: 30%;
+}
+
+.serverIcon.selected::before {
+    opacity: 1;
+    height: 70%;
+}
+
+#channelList {
+    flex: 1;
+}
+
 .list-item.channel > i {
     transform: scale(1.2) translateX(-5px);
     opacity: .4;
@@ -797,12 +870,19 @@ pre {
 .sent-message-errored {
     color: red;
     opacity: .8;
-    border-left: 4px solid red;
+}
+
+.sent-message-errored, [message-type="2"] {
+    border-left: 4px solid var(--accent);
+}
+
+[message-type="2"] {
+    padding-left: 15px !important;
 }
 
 .sent-message-errored::after {
     content: "!";
-    color: red;
+    color: var(--accent);
     position: absolute;
     left: 10px;
     top: 3px;

@@ -12,8 +12,8 @@
         js: /js/client.js, /js/ui.js, /js/app.js, https://cdn.jsdelivr.net/npm/vscroll, https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js;
         css: /css/main.css, /css/format.css;
 
-        ls-js: tiny, color, tabs, resize, tooltips, toast, nav;
-        ls-css: base, ls-flat, tabs, resize, tooltips, toast, nav;
+        ls-js: tiny, color, tabs, resize, tooltips, toast, nav, modal;
+        ls-css: base, ls-flat, tabs, resize, tooltips, toast, nav, modal;
 
         fonts: Montserrat, "JetBrains Mono";
 
@@ -84,8 +84,22 @@
 
         <ls-tab %home>
             <div %list>
-                <div .list-items>
-    
+                <div %channelOrganizer>
+                    <div %serverList ls-accent="auto">
+                        <div style="opacity: .2" ls-tooltip="Coming soon" .serverIcon>
+                            <i .bi-house-fill></i>
+                        </div>
+                        <div .selected ls-tooltip="Public channels" .serverIcon>
+                            <i .bi-list-task></i>
+                        </div>
+                        <hr>
+                        <div ls-accent="green" ls-tooltip="Join new servers/channels" onclick="app.joinServerModal.show()" .serverIcon>
+                            <i .bi-plus-lg></i>
+                        </div>
+                    </div>
+                    <div .list-items %channelList>
+        
+                    </div>
                 </div>
 
                 <div %profileBar>
@@ -185,6 +199,48 @@
                 escape to cancel, enter to confirm
             </span>
         </div>
+
+        <ls-modal %joinChatModal>
+            <ls-modal-body>
+                <h2 .ls-modal-title>Hop into a new conversation! (Coming soon)</h2>
+                <div .ls-modal-content>
+                    <b>Coming soon.</b> In the meantime, you can join a public channel (NOT a server) directly below. <br><br>
+
+                    <ls-group join>
+                        <input style="width: 100%" type="text" %publicChannelID placeholder="Enter public channel ID">
+                        <button %publicChannelJoin>Join</button>
+                    </ls-group>
+
+                    <br>
+
+                    (This is only TEMPORARY).
+                    
+                    <script>
+                        // Temporary
+
+                        O("#publicChannelJoin").on("click", async () => {
+                            let resonse = await app.client.request("/join", {
+                                method: "POST",
+                                body: JSON.stringify({
+                                    channel: +O("#publicChannelID").value
+                                })
+                            }).json()
+
+                            if(!resonse.success){
+                                LS.Modal.build({title:"Could not join channel", content: "Are you sure the channel exists and you have permissions to join it?\n(And also that you arent already a member of this channel)", buttons: ["ok"]}).show()
+                            } else {
+                                LS.Modal.build({title:"Success", content: "Public channel joined", buttons: ["ok"]}).show()
+                                app.joinServerModal.close()
+                                app.temporary_renderPubliChannels()
+                            }
+                        })
+                    </script>
+                </div>
+            </ls-modal-body>
+            <ls-modal-footer>
+                <button onclick="app.joinServerModal.close()">Cancel</button>
+            </ls-modal-footer>
+        </ls-modal>
     </div>
 
     <style>

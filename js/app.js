@@ -17,6 +17,8 @@ M.on("load", async ()=>{
             list: false
         }),
 
+        joinServerModal: LS.Modal("joinChat", O("#joinChatModal")),
+
         options: {
             messageSampleSize: 50
         },
@@ -77,6 +79,7 @@ M.on("load", async ()=>{
                     if(!result || result.error){
                         app.awaitingMessage.class("sent-message-waiting", false)
                         app.awaitingMessage.class("sent-message-errored")
+                        app.awaitingMessage.attr("ls-accent", "red")
                     }
 
                     app.awaitingMessage = null
@@ -162,40 +165,45 @@ M.on("load", async ()=>{
                     chat.on("typing.stop", async (id) => {
                         if(chat.typingUsers.filter(user => user !== app.client.user.id).length < 1) O("#typingUsers").class("hidden")
                     })
+
+                    chat.on("member.join", async (id) => {
+                        app.ui.renderMembers()
+                    })
                 }
 
-                app.ui.memberList.get(".list-items").clear();
-
-                ;(async () => {
-                    for(let member of chat.info.members){
-                        let profile = await Mazec.profile(member.member);
-    
-                        app.ui.memberList.get(".list-items").add(N({
-                            class: "list-item" + (profile.nsfw? " nsfw": ""),
-                            inner: [
-                                N({
-                                    class: "list-avatar",
-                                    inner: N("img", {
-                                        src: app.getAvatar(profile.avatar, 32)
-                                    })
-                                }),
-
-                                N("span", {innerText: profile.displayname}),
-
-                                ...profile.bot? [
-                                    N("ls-box", {class: "inline color bot-tag", accent: "blue", inner: "BOT"})
-                                ]: []
-                            ],
-                            onclick(){
-                                console.log(this.getBoundingClientRect().left);
-                                app.showProfile(member.member, this.getBoundingClientRect().left - (O("#profilePopup").getBoundingClientRect().width || 320) - 15)
-                            }
-                        }))
-                    }
-                })();
+                app.ui.renderMembers()
 
                 app.ui.messagesScrollBottom()
                 app.ui.drawTyping()
+            },
+
+            async renderMembers(){
+                app.ui.memberList.get(".list-items").clear();
+
+                for(let member of app.activeChat.info.members){
+                    let profile = await Mazec.profile(member.member);
+
+                    app.ui.memberList.get(".list-items").add(N({
+                        class: "list-item" + (profile.nsfw? " nsfw": ""),
+                        inner: [
+                            N({
+                                class: "list-avatar",
+                                inner: N("img", {
+                                    src: app.getAvatar(profile.avatar, 32)
+                                })
+                            }),
+
+                            N("span", {innerText: profile.displayname}),
+
+                            ...profile.bot? [
+                                N("ls-box", {class: "inline color bot-tag", accent: "blue", inner: "BOT"})
+                            ]: []
+                        ],
+                        onclick(){
+                            app.showProfile(member.member, this.getBoundingClientRect().left - (O("#profilePopup").getBoundingClientRect().width || 320) - 15)
+                        }
+                    }))
+                }
             },
 
             async fetchMessages(clear, prepareOnly){
@@ -323,7 +331,7 @@ M.on("load", async ()=>{
                 app.activeChat.traverseLocal(from, limit, (thisBuffer, i, nextBuffer) => {
                     if(!thisBuffer) return;
 
-                    let condense = !!nextBuffer && nextBuffer.author === thisBuffer.author && (thisBuffer.timestamp - nextBuffer.timestamp) < 300000;
+                    let condense = !!nextBuffer && nextBuffer.type == 0 && nextBuffer.author === thisBuffer.author && (thisBuffer.timestamp - nextBuffer.timestamp) < 300000;
                     if(thisBuffer.renderBuffer) thisBuffer.renderBuffer.class("condensed", condense)
                 })
                 
@@ -476,27 +484,47 @@ M.on("load", async ()=>{
         async messageElement(messageBuffer){
             let profile = await app.client.profile(messageBuffer.author);
 
-            let messageContent = app.renderMarkdown(messageBuffer.text);
+            let messageContent;
+
+            switch(messageBuffer.type){
+                case 0:
+                    messageContent = app.renderMarkdown(messageBuffer.text);
+                break;
+                case 2:
+                    messageContent = [
+                        N({innerText: profile.displayname, style: "color:var(--accent)", class: "maze-message-username", onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
+                        " has joined the conversation! ",
+                        N({innerText: app.ui.timeFormat(messageBuffer.timestamp, true).replace(",", ""), class: "maze-message-timestamp"}),
+                    ]
+                break;
+            }
 
             let element = N({
                 class: "maze-message " + (messageBuffer.author == app.client.user.id? "own" : "not-own") + (profile.nsfw? " nsfw": "") + (messageBuffer.sent? " sent-message-waiting" : ""),
+                
+                attr: {
+                    "message-type": String(messageBuffer.type)
+                },
+
                 id: "message-" + messageBuffer.id,
                 inner: [
 
-                    N({inner: [
-                        N("img", {src: app.getAvatar(profile.avatar), draggable: false, onload(){ this.parentElement.loading = false }})
-                    ], class: "maze-message-avatar", attr: {"load": "solid"}, onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
-
-                    N({inner: [
-                        N({innerText: profile.displayname, class: "maze-message-username", onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
-                        ...profile.nsfw? [
-                            N({inner: "NSFW", tooltip: "This profile may include NSFW imagery.<br>Click to change how this content is displayed", class: "maze-nsfw-badge", onclick(){ app }}),
-                        ] : [],
-                        ...profile.bot? [
-                            N("ls-box", {class: "inline color bot-tag", accent: "blue", inner: "BOT"})
-                        ]: [],
-                        N({innerText: app.ui.timeFormat(messageBuffer.timestamp, true).replace(",", ""), class: "maze-message-timestamp"}),
-                    ], class: "maze-message-author"}),
+                    ...messageBuffer.type == 0? [
+                        N({inner: [
+                            N("img", {src: app.getAvatar(profile.avatar), draggable: false, onload(){ this.parentElement.loading = false }})
+                        ], class: "maze-message-avatar", attr: {"load": "solid"}, onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
+    
+                        N({inner: [
+                            N({innerText: profile.displayname, class: "maze-message-username", onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
+                            ...profile.nsfw? [
+                                N({inner: "NSFW", tooltip: "This profile may include NSFW imagery.<br>Click to change how this content is displayed", class: "maze-nsfw-badge", onclick(){ app }}),
+                            ] : [],
+                            ...profile.bot? [
+                                N("ls-box", {class: "inline color bot-tag", accent: "blue", inner: "BOT"})
+                            ]: [],
+                            N({innerText: app.ui.timeFormat(messageBuffer.timestamp, true).replace(",", ""), class: "maze-message-timestamp"}),
+                        ], class: "maze-message-author"})
+                    ]: [],
 
                     N({
                         ...messageBuffer.text.length > 4000 ? {
@@ -591,6 +619,30 @@ M.on("load", async ()=>{
             }
 
             container.get(".profile-banner").style.background = profile.colors[1]? profile.colors[1].hex : "var(--elevate-0)"
+        },
+
+        async temporary_renderPubliChannels(){
+            O("#list .list-items").clear();
+
+            let channels = await Mazec.listChannels();
+
+            for(let channel of channels){
+                if(!channel.isMember) continue;
+
+                O("#list .list-items").add(N({
+                    class: "list-item channel",
+                    inner: [
+                        N("i", {class: "bi-hash"}),
+                        N("span", {
+                            innerText: channel.name
+                        })
+                    ],
+
+                    onclick(){
+                        app.ui.openChat(channel.room)
+                    }
+                }))
+            }
         }
     }
 
@@ -619,25 +671,7 @@ M.on("load", async ()=>{
             return
         }
 
-        let channels = await Mazec.listChannels();
-
-        for(let channel of channels){
-            if(!channel.isMember) continue;
-
-            O("#list .list-items").add(N({
-                class: "list-item channel",
-                inner: [
-                    N("i", {class: "bi-hash"}),
-                    N("span", {
-                        innerText: channel.name
-                    })
-                ],
-
-                onclick(){
-                    app.ui.openChat(channel.room)
-                }
-            }))
-        }
+        app.temporary_renderPubliChannels()
 
         // Set profile information
 

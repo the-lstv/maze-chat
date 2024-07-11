@@ -335,7 +335,8 @@ API = {
                                         attachments: data.attachments || "[]",
                                         author: User.id,
                                         room: id,
-                                        timestamp: Date.now()
+                                        timestamp: Date.now(),
+                                        type: 0
                                     }
     
                                     response = await mazeDatabase.table("chat.messages").insert(msg)
@@ -353,7 +354,8 @@ API = {
                                         //             msg.timestamp - globalTimeStart,
                                         //             msg.attachments.replace(/[\[\]]/g, ""),
                                         //             msg.mentions.replace(/[\[\]]/g, ""),
-                                        //             msg.text
+                                        //             msg.text,
+                                        //             0
                                         //         ])
                                         //     }
                                         // }
@@ -366,7 +368,8 @@ API = {
                                             msg.timestamp - globalTimeStart,
                                             msg.attachments.replace(/[\[\]]/g, ""),
                                             msg.mentions.replace(/[\[\]]/g, ""),
-                                            msg.text
+                                            msg.text,
+                                            0
                                         ]), true, true)
     
                                         res.send(JSON.stringify({id: msg.id}));
@@ -484,9 +487,11 @@ API = {
                                     return error(2)
                                 }
 
-                                let query = (req.getQuery("id") && typeof +req.getQuery("id") == "number")? [`select id, text, attachments, mentions, author, timestamp, edited from \`chat.messages\` where room=? and deleted = false and id =?`, [id, (+req.getQuery("id")) || 0]] : [`select id, text, attachments, mentions, author, timestamp, edited from \`chat.messages\` where room=? and deleted = false order by id desc limit ${(+req.getQuery("limit")) || 10} offset ${(+req.getQuery("offset")) || 0}`, [id]];
+                                // Todo: Implement memory caching
+
+                                let query = (req.getQuery("id") && typeof +req.getQuery("id") == "number")? [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false and id =?`, [id, (+req.getQuery("id")) || 0]] : [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false order by id desc limit ${(+req.getQuery("limit")) || 10} offset ${(+req.getQuery("offset")) || 0}`, [id]];
+                                
                                 response = await mazeDatabase.query(...query)
-                                console.log(query);
                                 
                                 if(!response.err){
                                     res.send(JSON.stringify(response.result.map(message => {
@@ -537,6 +542,69 @@ API = {
                                 })
                         }
                     }
+            break;
+
+            case "join":
+                if(User.error) return error(13);
+
+
+                // TEMPORARY
+
+                req.parseBody(async (data, fail) => {
+                    if(fail){
+                        error(fail)
+                        return send()
+                    }
+
+                    data = data.json;
+
+                    if(typeof data !== "object" || !(data.channel || data.server)){
+                        return error(2)
+                    }
+
+                    response = await mazeDatabase.table("chat.rooms.members").insert({
+                        member: User.id,
+                        room: data.channel,
+                        memberSince: Date.now()
+                    })
+
+                    if(!response.err){ 
+                        res.send(`{"success":true}`)
+
+                        response = await mazeDatabase.table("chat.messages").insert({
+                            text: "",
+                            mentions: "[]",
+                            attachments: "[]",
+                            author: User.id,
+                            room: data.channel,
+                            timestamp: Date.now(),
+                            type: 2
+                        })
+
+                        if(!response.err){
+                            let msg_id = response.result.insertId;
+
+                            backend.broadcast(`maze.chatMessages.${data.channel}`, A2U8([
+                                eventList.get("message"),
+                                User.id,
+                                data.channel,
+                                msg_id,
+                                0,
+                                "",
+                                "",
+                                "",
+                                2
+                            ]), true, true)
+
+                        } else {
+                            console.error(response.err);
+                            return error(24)
+                        }
+                    } else {
+                        console.log(response.err);
+                        return error(24)
+                    }
+                }).data()
             break;
 
             case "create":

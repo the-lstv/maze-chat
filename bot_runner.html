@@ -40,20 +40,29 @@
 
             console.log("Bot is connected and running!");
 
-            let chat = await client.chat(13)
+            async function listenToChat(id){
+                let chat = await client.chat(id)
+    
+                if(chat.error) throw chat.error; // For example, the bot does not have access
+    
+                chat.open()
 
-            if(chat.error) throw chat.error; // For example, the bot does not have access
+                console.log("Listening to channel", id);
+    
+                chat.on("message", async message => {
+                    console.log("Received message:", message.text);
+    
+                    if(message.text == "ping"){
+                        chat.send("pong")
+                    }
+                })
+            }
 
-            chat.open()
+            let channels = await client.listChannels();
 
-            chat.on("message", async message => {
-                console.log("Received message:", message.text);
-
-                if(message.text == "ping"){
-                    chat.send("pong")
-                }
-            })
-
+            for(channel of channels){
+                listenToChat(channel.room)
+            }
         })()
     </script>
 

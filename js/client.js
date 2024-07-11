@@ -386,10 +386,24 @@
                                         timestamp: event[4] + globalTimeStart,
                                         attachments: event[5],
                                         mentions: event[6],
-                                        text: event[7]
+                                        text: event[7],
+                                        type: event[8],
                                     };
 
                                     let chat = this.chats[event[2]];
+
+                                    // User joined
+                                    if(event[8] == 2){
+                                        chat.info.members.push({
+                                            member: event[1],
+                                            memberSince: event[4] + globalTimeStart,
+                                            isBanned: false,
+                                            isOwner: false,
+                                            isMember: true
+                                        })
+
+                                        chat.invoke("member.join", event[1]);
+                                    }
 
                                     chat.typingUsers = chat.typingUsers.filter(user => user !== event[1])
 
