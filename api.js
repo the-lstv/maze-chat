@@ -820,7 +820,7 @@ api = {
         close(ws, code, message){
             cache.numConnections[ws.user.id]--;
 
-            if(cache.numConnections[ws.user.id] == 0) api.util.updatePresence(uws.ser.id, 0)
+            if(cache.numConnections[ws.user.id] == 0) api.util.updatePresence(ws.user.id, 0)
 
             ws.forget(false)
         }
