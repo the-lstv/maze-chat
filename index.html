@@ -9,7 +9,7 @@
     }
 
     @resources {
-        js: /js/client.js, /js/ui.js, /js/app.js, https://cdn.jsdelivr.net/npm/vscroll, https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js;
+        js: /js/client.js, /js/ui.js, /js/app.js, https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js;
         css: /css/main.css, /css/format.css;
 
         ls-js: tiny, color, tabs, resize, tooltips, toast, nav, modal;
@@ -24,8 +24,8 @@
 <page>
     <main %main message-style="channel">
 
-        <ls-tab %splash loading>
-
+        <ls-tab %splash>
+            <div .messageLoader></div>
         </ls-tab>
 
 
@@ -36,19 +36,10 @@
         </ls-tab>
 
 
-        <ls-tab %decide>
-            <img src="/logo.svg" alt="Mazechat logo" draggable="false">
-            <div>
-                <button onclick="tabs.setActive('login')" class="pill fill">Create account</button> <br>
-                <button onclick="tabs.setActive('intro-slideshow')" class="pill">Log-In</button>
-            </div>
-        </ls-tab>
-
-
         <!-- temporary! -->
         <ls-tab %login .intro>
 
-            <img src="https://cdn.extragon.cloud/file/670a4b9db1fd04d0c3daa0de7dc842fa.png?size=250" loading="lazy" alt="Chat bubbles" draggable="false">
+            <!-- <img src="https://cdn.extragon.cloud/file/670a4b9db1fd04d0c3daa0de7dc842fa.png?size=250" loading="lazy" alt="Chat bubbles" draggable="false"> -->
 
             <div style="text-align:center">
                 <div style="font-size:2.5em;font-weight:900">

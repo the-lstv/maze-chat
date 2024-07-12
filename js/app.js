@@ -636,7 +636,8 @@ M.on("load", async ()=>{
         async temporary_renderPubliChannels(){
             O("#list .list-items").clear();
 
-            let channels = await Mazec.listChannels();
+            let channels = app.client.initialChannelCache || await Mazec.listChannels();
+            app.client.initialChannelCache = null;
 
             for(let channel of channels){
                 if(!channel.isMember) continue;
@@ -663,25 +664,19 @@ M.on("load", async ()=>{
     
     let token = localStorage["==temporary.2226b75"];
 
-    tabs.setActive(token? 'home' : 'login');
+    if(!token) tabs.setActive('login');
 
     // Startup
     if(token) {
         let login = await app.client.login(token)
 
-        if(!login){
-            alert("Could not log-in")
+        if(typeof login !== "object"){
+            alert(login)
             tabs.setActive('login');
             return
         }
 
-        let error = await Mazec.initialize()
-
-        if(error){
-            alert(error)
-            tabs.setActive('login');
-            return
-        }
+        // let error = await Mazec.initialize()
 
         app.temporary_renderPubliChannels()
 
@@ -718,10 +713,11 @@ M.on("load", async ()=>{
         })
 
         O("#messageButtons").on("click", () => O("#messageButtons").applyStyle({display: "none"}))
+
+        LS.invoke("app.ready", app);
+        app.screen.setActive("home")
     }
 
-    LS.invoke("app.ready", app);
-    
     LS.GlobalEvents.prepare({
         name: "app.ready",
         completed: true

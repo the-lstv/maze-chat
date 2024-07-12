@@ -17,7 +17,7 @@
         dec = new TextDecoder,
         encode = (text) => enc.encode(text),
         decode = (bytes) => dec.decode(bytes),
-        version = "0.1.20",
+        version = "0.3.0",
         globalTimeStart = 1697840000000,
         eventList = [
             "heartbeat",
@@ -347,7 +347,12 @@
     function MazecClient(gateway, options){
         return new((_this => class MazecClient {
             constructor(gateway, options){
-                options = options || {};
+
+                options = LS.Util.defaults({
+                    heartbeatInterval: 4000,
+                    heartbeatTimeout: 2000,
+                }, options)
+
                 _this = this;
     
                 this.queue = [];
@@ -366,7 +371,7 @@
                 this.events = new((LS.EventResolver || options.EventResolver)())(this);
     
                 this.on("socket.raw", async (evt) => {
-                    if(typeof evt.data == "string") return; //We don't do that here :D
+                    if(typeof evt.data == "string" && evt.data.length > 1) return;
     
                     let data = new Uint8Array(await evt.data.arrayBuffer());
 
@@ -377,6 +382,7 @@
                             case "heartbeat":
                                 this.lastHeartbeat = Date.now()
                             break;
+
                             case "message": 
                                 if(this.chats[event[2]]) {
                                     let buffer = {
@@ -392,7 +398,7 @@
 
                                     let chat = this.chats[event[2]];
 
-                                    // User joined
+                                    // User joined message
                                     if(event[8] == 2){
                                         chat.info.members.push({
                                             member: event[1],
@@ -418,6 +424,11 @@
                                     chat.messageBuffer[event[3]] = buffer
                                 };
                             break;
+
+                            case "edit":
+                                
+                            break;
+
                             case "edit":
                                 if(this.chats[event[1]]){
                                     let buffer = {
@@ -433,6 +444,7 @@
                                     if(this.chats[event[1]].messageBuffer[event[2]]) Object.assign(this.chats[event[1]].messageBuffer[event[2]], buffer)
                                 }
                             break;
+
                             case "delete":
                                 if(this.chats[event[1]]){
                                     this.chats[event[1]].invoke("delete", event[2]);
@@ -440,6 +452,7 @@
                                     delete this.chats[event[1]].messageBuffer[event[2]]
                                 }
                             break;
+
                             case "typing":
                                 let chat = this.chats[event[1]];
 
@@ -489,14 +502,42 @@
                 this.version = version;
                 this.api = gateway;
                 this.chats = {};
+                this.options = options;
             }
 
-            async login(token, callback = data => data){
+            async login(token, callback = data => data, preloadChannels = true){
                 _this.user.token = token
-                let test = await _this.request().json();
+                let conn = await _this.request("?profile=true" + (preloadChannels? "&channels=true": "")).json();
 
-                if(test.user_fragment && !test.user_fragment.error){
-                    return callback(_this.user.fragment = test.user_fragment)
+                if(conn.user_fragment && !conn.user_fragment.error){
+                    _this.user.fragment = conn.user_fragment
+
+                    if(!_this.user.token) {
+                        return callback("No user is logged in")
+                    }
+
+                    if(conn.user_profile){
+                        _this.profileCache[conn.user_fragment.id] = _this._cleanProfile(conn.user_profile);
+                    }
+
+                    if(conn.user_channels){
+                        _this.initialChannelCache = conn.user_channels
+                    }
+
+                    if(_this.checkVersion(conn.lowest_client) == -1){
+                        return callback(`Mazec client is too outdated (minimum supported is ${conn.lowest_client}, current is ${version})`)
+                    }
+
+                    if(!conn.user_profile){
+                        console.warn("[Mazec Debug] This user does not have a profile set-up yet.")
+                    }
+        
+                    _this.isOutdated = _this.checkVersion(conn.latest_client) == -1;
+                    _this.server = conn
+        
+                    await _this.ensureSocket()
+
+                    return callback(conn.user_fragment)
                 } else return callback(false)
             }
     
@@ -522,38 +563,6 @@
                     }
                 }
             }
-    
-            async initialize(channel = "default"){
-                if(!_this.user.token) {
-                    return "No user is logged in"
-                }
-
-                let conn;
-    
-                try {
-                    conn = await _this.request().json()
-                } catch (e) {
-                    console.error("[Mazec Debug] ", e);
-                    return "Couldn't connect with the API"
-                }
-                
-                if(_this.checkVersion(conn.lowest_client) == -1){
-                    return `Mazec client is too outdated (minimum supported is ${conn.lowest_client}, current is ${version})`
-                }
-    
-                let profile = await _this.profile(conn.user_fragment.id);
-                _this.profileCache[conn.user_fragment.id] = profile;
-
-                if(!profile){
-                    console.warn("[Mazec Debug] This user does not have a profile set-up yet.")
-                }
-    
-                _this.isOutdated = _this.checkVersion(conn.latest_client) == -1;
-                _this.server = conn
-    
-                await _this.ensureSocket()
-                return
-            }
 
             async prefetchProfiles(list = []){
                 if(list.length < 1) return;
@@ -572,11 +581,8 @@
                             result.push(profile)
                             continue
                         }
-                        
-                        profile.created = true
-                        profile.colors = profile.colors.split(",").map(color => window.C? C(color): color)
         
-                        _this.profileCache[profile.id] = profile
+                        _this.profileCache[profile.id] = _this._cleanProfile(profile)
                     }
 
                 }
@@ -595,6 +601,12 @@
 
             async profileSetup(){
                 
+            }
+
+            _cleanProfile(profile){
+                profile.created = true
+                profile.colors = profile.colors.split(",").map(color => window.C? C(color): color)
+                return profile
             }
     
             ensureSocket(){
@@ -625,9 +637,10 @@
                             if(_this.heartBeat) clearInterval(_this.heartBeat);
     
                             _this.heartBeat = setInterval(async()=>{
-                                if((Date.now() - _this.lastHeartbeat) > 7000){
+                                if((Date.now() - _this.lastHeartbeat) > (_this.options.heartbeatInterval + _this.options.heartbeatTimeout)){
+                                    _this.invoke("heartbeat.miss")
                                     console.warn("[Mazec - Network] SKIPPED A HEARTBEAT!")
-                                }
+                                } else _this.invoke("heartbeat");
     
                                 if(!_this.socket){
                                     _this.die = true
@@ -639,13 +652,15 @@
                                 }
     
                                 if(_this.socket.readyState > 1){
+
                                     clearInterval(_this.heartBeat)
                                     await _this.ensureSocket()
+
                                 } else {
                                     _this.lastHeartbeatStarted = Date.now()
                                     _this.send([0])
                                 }
-                            }, 14000)
+                            }, _this.options.heartbeatInterval)
     
                             r(_this.socket)
                         })

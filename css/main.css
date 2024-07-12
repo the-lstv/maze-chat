@@ -8,6 +8,7 @@
 
 main {
     height: 100vh;
+    height: 100dvh;
     width: 100vw;
     position: fixed;
     top: 0;
@@ -792,7 +793,7 @@ pre {
 .typingDots {
     width: 1.4em;
     aspect-ratio: 4;
-    --_g: no-repeat radial-gradient(circle closest-side,#ffffff 90%,#0000);
+    --_g: no-repeat radial-gradient(circle closest-side, var(--color) 90%,#0000);
     background: 
       var(--_g) 0%   50%,
       var(--_g) 50%  50%,
@@ -818,7 +819,7 @@ pre {
     content: "";
     position: absolute;
     border-radius: 50px;
-    box-shadow: 0 0 0 3px inset #fff;
+    box-shadow: 0 0 0 3px inset var(--color);
     animation: l4 2.5s infinite;
 }
 
@@ -855,6 +856,13 @@ pre {
         inset: 0 35px 35px 0;
     }
 }
+
+#splash {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 
 #messageLoader {
     position: absolute;

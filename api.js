@@ -1,4 +1,4 @@
-var API, backend, db, mazeDatabase;
+var api, backend, db, mazeDatabase;
 
 let clients = {}, globalMessageID = 0;
 
@@ -20,7 +20,10 @@ let enc = new TextEncoder,
     ],
 
 
-    profileCache = {}
+    cache = {
+        profiles: {},
+        channelMemberships: {}
+    }
 ;
 
 let userStatusCache = {};
@@ -172,11 +175,77 @@ function U82A(bytes) {
     return result;
 }
 
-API = {
+api = {
     Initialize(backend_){
         backend = backend_;
         db = backend_.db;
         mazeDatabase = db.database("extragon")
+    },
+
+    util: {
+        async getProfiles(list){
+            let users = list.filter(_ => _ || _ === 0).map(id => id == "me"? User.id: +id).filter(_ => !isNaN(_)), result = [];
+            
+            
+            let missingCache = users.filter(_ => !cache.profiles[_]);
+            
+            if(missingCache.length > 0) {
+                let profiles = await mazeDatabase.query(`SELECT link, displayname, avatar, banner, bio, status, colors, nsfw, bot FROM \`chat.profiles\` WHERE link in (${missingCache.join()})`)
+                
+                if(profiles.err) return error(24), console.error(profiles.err);
+                
+                for(let profile of profiles.result){
+                    profile.bot = !!profile.bot[0]
+                    profile.nsfw = !!profile.nsfw[0]
+                    
+                    profile.id = profile.link
+                    delete profile.link
+                    
+                    profile.onlineStatus = userStatusCache[profile.id] || 0;
+                    
+                    cache.profiles[profile.id] = profile
+                }
+            }
+            
+            for(let user of users){
+                if(cache.profiles[user]) result.push(cache.profiles[user]); else result.push({
+                    user,
+                    created: false
+                })
+            }
+
+            return result
+        },
+
+        getChannels(user, limit = 100, offset = 0){
+            if(cache.channelMemberships[user]) return cache.channelMemberships[user];
+
+            return new Promise(resolve => {
+                mazeDatabase.query(
+                    `SELECT room, isOwner, isBanned, bannedUntil, memberSince, isMember, location, type, \`chat.rooms\`.name FROM \`chat.rooms.members\` INNER JOIN \`chat.rooms\` ON \`chat.rooms.members\`.room = \`chat.rooms\`.id WHERE member = ? LIMIT ? OFFSET ?`,
+                    [user, limit, offset],
+    
+                    function(err, results) {
+                        if(!err){
+                            results = results.map(result => {
+                                result.isOwner = !!result.isOwner[0]
+                                result.isBanned = !!result.isBanned[0]
+                                result.isMember = !!result.isMember[0]
+                                return result
+                            });
+
+                            cache.channelMemberships[user] = results;
+                        
+                            return resolve(results)
+                        } else resolve(null), console.log(err);
+                    }
+                )
+            })
+        },
+
+        join(user){
+            cache.channelMemberships[user].push(membership)
+        }
     },
 
     async HandleRequest({req, res, segments, error, shift}){
@@ -186,11 +255,23 @@ API = {
 
         switch(shift()){
             case "": case null:
+                // Do not move the below line to the request as "req" cannot be accessed after awaiting.
+                let includeProfile = typeof req.getQuery("profile") === "string", includeChannels = typeof req.getQuery("channels") === "string";
+
                 res.send(JSON.stringify({
                     auth: "/user/",
                     user_fragment: User,
-                    latest_client: "0.2.0",
-                    lowest_client: "0.1.9",
+
+                    ...User && includeProfile? {
+                        user_profile: (await api.util.getProfiles([User.id]))[0]
+                    } : {},
+
+                    ...User && includeChannels? {
+                        user_channels: await api.util.getChannels(User.id)
+                    } : {},
+
+                    latest_client: "0.3.0",
+                    lowest_client: "0.3.0",
                     sockets: [
                         `ws${req.domain.endsWith("test")? "": "s"}://${req.domain}/v2/mazec/`
                     ]
@@ -206,24 +287,9 @@ API = {
 
             case "list":
                 if(!User || User.error) return error(13);
-
-                await new Promise(resolve => {
-                    mazeDatabase.query(
-                        `SELECT room, isOwner, isBanned, bannedUntil, memberSince, isMember, location, type, \`chat.rooms\`.name FROM \`chat.rooms.members\` INNER JOIN \`chat.rooms\` ON \`chat.rooms.members\`.room = \`chat.rooms\`.id WHERE member = ? LIMIT ? OFFSET ?`,
-                        [User.id, +req.getQuery("limit") || 100, +req.getQuery("offset") || 0],
-
-                        async function(err, results) {
-                            if(!err){
-                                return res.send(JSON.stringify(results.map(result => {
-                                    result.isOwner = !!result.isOwner[0]
-                                    result.isBanned = !!result.isBanned[0]
-                                    result.isMember = !!result.isMember[0]
-                                    return result
-                                })));
-                            } else return error(24), console.log(err);
-                        }
-                    )
-                })
+                
+                let results = await api.util.getChannels(User.id, +req.getQuery("limit") || 100, +req.getQuery("offset") || 0);
+                return results? res.send(JSON.stringify(results)): error(24)
             break;
 
 
@@ -269,36 +335,9 @@ API = {
                     break;
 
                     case "profile":
-                        let users = shift().split(",").filter(_ => _).map(id => id == "me"? User.id: +id).filter(_ => !isNaN(_)), result = [];
-
-                        let missingCache = users.filter(_ => !profileCache[_]);
-                    
-                        if(missingCache.length > 0) {
-                            let profiles = await mazeDatabase.query(`SELECT link, displayname, avatar, banner, bio, status, colors, nsfw, bot FROM \`chat.profiles\` WHERE link in (${missingCache.join()})`)
-                            
-                            if(profiles.err) return error(24), console.error(profiles.err);
-    
-                            for(let profile of profiles.result){
-                                profile.bot = !!profile.bot[0]
-                                profile.nsfw = !!profile.nsfw[0]
-    
-                                profile.id = profile.link
-                                delete profile.link
-    
-                                profile.onlineStatus = userStatusCache[profile.id] || 0;
-    
-                                profileCache[profile.id] = profile
-                            }
-                        }
-
-                        for(let user of users){
-                            if(profileCache[user]) result.push(profileCache[user]); else result.push({
-                                user,
-                                created: false
-                            })
-                        }
-
-                        res.send(Buffer.from(JSON.stringify(result)))
+                        let results = await api.util.getProfiles(shift().split(","));
+                        
+                        if(results) res.send(Buffer.from(JSON.stringify(results))); else error(24)
                     break;
                 }
             break;
@@ -674,7 +713,7 @@ API = {
                 // ws.queue.push(data)
 
                 if(ws.alive){
-                    ws.send(A2U8(data));
+                    ws.send(A2U8(data), true, true);
                 }
             }
 
@@ -710,7 +749,7 @@ API = {
                     case "heartbeat":
                         // Heartbeat
                         ws.alive = true;
-                        ws.write([0])
+                        ws.send(new Uint8Array([0]), true, true);
                     continue;
 
                     case "authorize":
@@ -762,4 +801,4 @@ API = {
     }
 }
 
-module.exports = API
+module.exports = api
