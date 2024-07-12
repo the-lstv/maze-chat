@@ -190,7 +190,7 @@
 
                 this.parent = parent;
 
-                if(this.parent.chats[id]) throw "Maze client error; Tried initializing the same chat twice";
+                if(this.parent.chats[id]) return this.parent.chats[id];
 
                 this.id = id;
                 this.info = chat;
@@ -207,7 +207,7 @@
             async send(text, attachments, mentions){
                 this.typingTimeout = 0;
 
-                return await _this.parent.request("/chat/" + _this.id + "/post/", {
+                return await _this.parent.request("/channels/" + _this.id + "/post/", {
                     method: "POST",
                     body: JSON.stringify({
                         mentions, attachments, text
@@ -271,7 +271,7 @@
                     },
 
                     async fetch(){
-                        let query = await _this.parent.request(`/chat/${_this.id}/get/?id=${id}`).send();
+                        let query = await _this.parent.request(`/channels/${_this.id}/get/?id=${id}`).send();
 
                         if(query.ok){
                             let message = (await query.json())[0];
@@ -286,7 +286,7 @@
                     },
 
                     async edit(text, attachments, mentions){
-                        return await _this.parent.request("/chat/" + _this.id + "/edit/", {
+                        return await _this.parent.request("/channels/" + _this.id + "/edit/", {
                             method: "POST",
                             body: JSON.stringify({
                                 id,
@@ -296,7 +296,7 @@
                     },
 
                     async delete(){
-                        return await _this.parent.request("/chat/" + _this.id + "/delete/", {
+                        return await _this.parent.request("/channels/" + _this.id + "/delete/", {
                             method: "POST",
                             body: JSON.stringify({
                                 id
@@ -305,7 +305,7 @@
                     },
 
                     async react(emoji){
-                        return await _this.parent.request("/chat/" + _this.id + "/react/", {
+                        return await _this.parent.request("/channels/" + _this.id + "/react/", {
                             method: "POST",
                             body: JSON.stringify({
                                 id,
@@ -320,7 +320,7 @@
 
             get(limit, offset = 0){
                 return new Promise(async resolve => {
-                    let query = await _this.parent.request(`/chat/${_this.id}/read/?limit=${(+limit) || 10}&offset=${(+offset) || 0}`).send();
+                    let query = await _this.parent.request(`/channels/${_this.id}/read/?limit=${(+limit) || 10}&offset=${(+offset) || 0}`).send();
 
                     if(query.ok){
                         let messages = await query.json();
@@ -352,8 +352,8 @@
             constructor(gateway, options){
 
                 options = LS.Util.defaults({
-                    heartbeatInterval: 8000,
-                    heartbeatTimeout: 2000,
+                    heartbeatInterval: 5000,
+                    heartbeatTimeout: 6000,
                 }, options)
 
                 _this = this;
@@ -528,7 +528,7 @@
                     }
 
                     if(conn.user_channels){
-                        _this.initialChannelCache = conn.user_channels
+                        _this.initialMembershipCache = conn.user_channels
                     }
 
                     if(_this.checkVersion(conn.lowest_client) == -1){
@@ -572,7 +572,7 @@
             }
 
             async prefetchProfiles(list = []){
-                if(list.length < 1) return;
+                if(list.length < 1) return [];
 
                 list = list.map(id => +id).filter(_ => typeof id !== "number" && !isNaN(_));
 
@@ -612,7 +612,7 @@
 
             _cleanProfile(profile){
                 profile.created = true
-                profile.colors = profile.colors.split(",").map(color => window.C? C(color): color)
+                if(profile.colors) profile.colors = profile.colors.split(",").map(color => window.C? C(color): color)
                 return profile
             }
     
@@ -644,7 +644,7 @@
                             if(_this.heartBeat) clearInterval(_this.heartBeat);
     
                             _this.heartBeat = setInterval(async()=>{
-                                if((Date.now() - _this.lastHeartbeat) > (_this.options.heartbeatInterval + _this.options.heartbeatTimeout)){
+                                if((Date.now() - _this.lastHeartbeat) > _this.options.heartbeatTimeout){
                                     _this.invoke("heartbeat.miss")
 
                                     console.warn("[Mazec - Network] SKIPPED A HEARTBEAT!")
@@ -720,25 +720,54 @@
                     body: JSON.stringify(options)
                 }).json())
             }
-    
-            async chat(id){
-                if(this.chats[id]) return this.chats[id];
-    
-                let chat = await _this.request("/chat/" + id).json()
-    
-                if(chat && !chat.error){
-                    this.chats[id] = chatClass(this, id, chat);
-                    return this.chats[id]
-                } else {
-                    return {
-                        error: chat.error || "Unknown error while loadin the chat",
-                        code: chat.code || -1
+
+            async getChats(list){
+                if(list.length < 1) return [];
+
+                list = list.map(id => +id).filter(_ => typeof id !== "number" && !isNaN(_));
+
+                let missingList = list.filter(id => !_this.chats[id]), result = [];
+
+                if(missingList.length > 0){
+                    let data = await _this.request("/channels/" + missingList.join(",")).json();
+
+                    if(!Array.isArray(data)) throw "Failed fetching profiles " + missingList.join(", ");
+
+                    for(let chat of data){
+                        if(!chat || chat.error){
+                            result.push({
+                                error: chat.error || "Unknown error while loadin the chat",
+                                code: chat.code || -1
+                            })
+                            continue
+                        }
+
+                        _this.chats[chat.id] = chatClass(_this, chat.id, chat);
                     }
+
                 }
+
+                for(let channel of list){
+                    if(_this.chats[channel]) result.push(_this.chats[channel] || null)
+                }
+
+                return result
+            }
+
+            async chat(id){
+                return (await _this.getChats([id]))[0]
+            }
+
+            async getAllChats(){
+                return await app.client.getChats((await app.client.listChannels()).map(channel => channel.room))
+            }
+
+            async server(){
+
             }
 
             async listChannels(){
-                return await _this.request("/list").json()
+                return _this.initialMembershipCache || await _this.request("/list").json()
             }
         })())(gateway, options)
     }

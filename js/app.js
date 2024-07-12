@@ -81,8 +81,6 @@ M.on("load", async ()=>{
                         app.awaitingMessage.class("sent-message-errored")
                         app.awaitingMessage.attr("ls-accent", "red")
                     }
-
-                    app.awaitingMessage = null
                 }, 50)
             },
 
@@ -99,7 +97,7 @@ M.on("load", async ()=>{
 
                 app.ui.fetchMessages(true, true) // Only prepares the view
 
-                let firstLoad = !app.client.chats[id], chat = await app.client.chat(id)
+                let chat = await app.client.chat(id)
 
                 // Pre-fetch all profiles that are a part of the chat
                 await app.client.prefetchProfiles(chat.info.members.map(member => member.member))
@@ -124,60 +122,11 @@ M.on("load", async ()=>{
 
                 app.chats[id] = chat;
 
-                chat.open() // Subscribe for socket updates (like new messages, edits, etc.)
-
                 app.activeChatID = id;
 
                 app.ui.fetchMessages(true)
 
-                if(firstLoad){
-                    chat.on("message", async (msg) => {
-                        if(app.activeChat.id !== chat.id) return;
-
-                        if(msg.author === app.client.user.id) {
-                            if(app.awaitingMessage) app.awaitingMessage.remove()
-                            app.awaitingMessage = null
-                        }
-    
-                        O("#messageArea").add(await app.messageElement(msg))
-                        app.ui.messagesScrollBottom()
-                        app.ui.condenseMessages(0, 5)
-                    })
-    
-                    chat.on("edit", (buffer) => {
-                        if(app.activeChat.id !== chat.id) return;
-
-                        let element = chat.messageBuffer[buffer.id].renderBuffer;
-    
-                        if(element){
-                            element.get(".maze-message-text").set(app.renderMarkdown(buffer.text) + app.ui.editedMessageBadge)
-                        }
-                    })
-    
-                    chat.on("delete", (id) => {
-                        if(app.activeChat.id !== chat.id) return;
-
-                        app.ui.condenseMessages(Object.keys(app.activeChat.messageBuffer).indexOf(`${id - 5}`) + 1, 15)
-                    })
-    
-                    chat.on("typing", async (id) => {
-                        if(app.activeChat.id !== chat.id) return;
-
-                        app.ui.drawTyping()
-                    })
-    
-                    chat.on("typing.stop", async () => {
-                        if(app.activeChat.id !== chat.id) return;
-
-                        if(chat.typingUsers.filter(user => user !== app.client.user.id).length < 1) O("#typingUsers").class("hidden")
-                    })
-
-                    chat.on("member.join", async (id) => {
-                        if(app.activeChat.id !== chat.id) return;
-
-                        app.ui.renderMembers()
-                    })
-                }
+                app.handleChannelEvents(chat)
 
                 app.ui.renderMembers()
 
@@ -481,6 +430,94 @@ M.on("load", async ()=>{
             // TODO: Make a better, real parser :D
         },
 
+        pushNotification(title, options, onclick){
+            function notify(){
+                const notification = new Notification(title, options);
+                notification.onclick = onclick || null;
+            }
+
+            if (Notification.permission === "granted") {
+                notify()
+            } else if (Notification.permission !== "denied") {
+                Notification.requestPermission().then((permission) => {
+                    if (permission === "granted") {
+                        notify()
+                    }
+                });
+            }
+
+            // Denied :(
+        },
+
+        handleChannelEvents(chat){
+            chat.open() // Subscribe for socket updates (like new messages, edits, etc.)
+
+            if(!chat.maze_handling){
+
+                chat.maze_handling = true;
+
+                chat.on("message", async (msg) => {
+                    if(msg.author === app.client.user.id) {
+                        if(app.awaitingMessage) app.awaitingMessage.remove()
+                        app.awaitingMessage = null
+                    }
+                    
+                    if(app.activeChat && app.activeChat.id === chat.id) {
+                        O("#messageArea").add(await app.messageElement(msg))
+                        app.ui.messagesScrollBottom()
+                        app.ui.condenseMessages(0, 5)
+                    } else {
+                        let profile = await app.client.profile(msg.author);
+
+                        // Got notification
+
+
+                        // ,..
+
+                        app.pushNotification("Message in #" + msg.room, {
+                            body: msg.text,
+                            icon: "https://cdn.extragon.cloud/file/" + (profile.avatar || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!profile.avatar || profile.avatar.endsWith("svg")? "" : "?size=" + size)
+                        })
+                    }
+                })
+
+                chat.on("edit", (buffer) => {
+                    if(!app.activeChat || app.activeChat.id !== chat.id) return;
+
+                    let element = chat.messageBuffer[buffer.id].renderBuffer;
+
+                    if(element){
+                        element.get(".maze-message-text").set(app.renderMarkdown(buffer.text) + app.ui.editedMessageBadge)
+                    }
+                })
+
+                chat.on("delete", (id) => {
+                    if(!app.activeChat || app.activeChat.id !== chat.id) return;
+
+                    app.ui.condenseMessages(Object.keys(app.activeChat.messageBuffer).indexOf(`${id - 5}`) + 1, 15)
+                })
+
+                chat.on("typing", async (id) => {
+                    // TODO: handle this
+                    if(!app.activeChat || app.activeChat.id !== chat.id) return;
+
+                    app.ui.drawTyping()
+                })
+
+                chat.on("typing.stop", async () => {
+                    if(!app.activeChat || app.activeChat.id !== chat.id) return;
+
+                    if(chat.typingUsers.filter(user => user !== app.client.user.id).length < 1) O("#typingUsers").class("hidden")
+                })
+
+                chat.on("member.join", async (id) => {
+                    if(!app.activeChat || app.activeChat.id !== chat.id) return;
+
+                    app.ui.renderMembers()
+                })
+            }
+        },
+
         async messageElement(messageBuffer){
             let profile = await app.client.profile(messageBuffer.author);
 
@@ -642,23 +679,25 @@ M.on("load", async ()=>{
         async temporary_renderPubliChannels(){
             O("#list .list-items").clear();
 
-            let channels = app.client.initialChannelCache || await app.client.listChannels();
+            let memberships = app.client.initialChannelCache || await app.client.listChannels();
             app.client.initialChannelCache = null;
 
-            for(let channel of channels){
-                if(!channel.isMember) continue;
+            for(let membership of memberships){
+                if(!membership.isMember) continue;
+
+                let channel = await app.client.chat(membership.room);
 
                 O("#list .list-items").add(N({
                     class: "list-item channel",
                     inner: [
                         N("i", {class: "bi-hash"}),
                         N("span", {
-                            innerText: channel.name
+                            innerText: membership.name
                         })
                     ],
 
                     onclick(){
-                        app.ui.openChat(channel.room)
+                        app.ui.openChat(membership.room)
                     }
                 }))
             }
@@ -689,7 +728,7 @@ M.on("load", async ()=>{
         // Set profile information
 
         let profile = await app.client.profile(app.client.user.id), profileBar = O("#profileBar");
-        
+
         profileBar.get(".list-avatar").set(app.getAvatar(profile, 32, true))
 
         profileBar.get(".profileBarName").set(N({innerText: profile.displayname}))
@@ -716,6 +755,7 @@ M.on("load", async ()=>{
             }
         })
 
+        app.screen.setActive("home")
 
         app.client.on("heartbeat.miss", () => {
             O("#reconnection").style.display = "flex"
@@ -729,11 +769,13 @@ M.on("load", async ()=>{
             O("#reconnection").style.display = "none"
         })
 
-
         O("#messageButtons").on("click", () => O("#messageButtons").applyStyle({display: "none"}))
-
+        
         LS.invoke("app.ready", app);
-        app.screen.setActive("home")
+
+        let channels = await app.client.getAllChats()
+
+        for(let channel of channels) app.handleChannelEvents(channel);
     }
 
     LS.GlobalEvents.prepare({

@@ -23,9 +23,16 @@ let enc = new TextEncoder,
 
     cache = {
         profiles: {},
-        channelMemberships: {},
+
+        memberships: {
+            channel: {},
+            user: {},
+            server: {},
+        },
+
         presence: {},
         numConnections: {},
+        channels: {}
     }
 ;
 
@@ -219,13 +226,44 @@ api = {
             return result
         },
 
-        getChannels(user, limit = 100, offset = 0){
-            if(cache.channelMemberships[user]) return cache.channelMemberships[user];
+        async getChannels(list){
+            let channels = list.filter(_ => _ || _ === 0).map(id => id == "me"? User.id: +id).filter(_ => !isNaN(_)), result = [];
+
+            let missingCache = channels.filter(_ => !cache.channels[_]);
+            
+            if(missingCache.length > 0) {
+                let response = await mazeDatabase.query(`select * from \`chat.rooms\` where id in (${missingCache.join()})`)
+                
+                if(response.err) return error(24), console.error(response.err);
+                
+                for(let channel of response.result){
+                    cache.channels[channel.id] = channel
+                }
+            }
+
+            for(let channel of channels){
+                if(cache.channels[channel]) result.push(cache.channels[channel]);
+                
+                else result.push({
+                    channel,
+                    success: false
+                })
+            }
+
+            return result
+        },
+
+        getMemberships(user = null, server = null, channel = null){
+            let isUser = typeof user === "number", isServer = typeof server === "number", isChannel = typeof channel === "number";
+
+            if      (isUser && cache.memberships.user[user]) return cache.memberships.user[user];
+            else if (isServer && cache.memberships.server[server]) return cache.memberships.server[server];
+            else if (isChannel && cache.memberships.channel[channel]) return cache.memberships.channel[channel];
 
             return new Promise(resolve => {
                 mazeDatabase.query(
-                    `SELECT room, isOwner, isBanned, bannedUntil, memberSince, isMember, location, type, \`chat.rooms\`.name FROM \`chat.rooms.members\` INNER JOIN \`chat.rooms\` ON \`chat.rooms.members\`.room = \`chat.rooms\`.id WHERE member = ? LIMIT ? OFFSET ?`,
-                    [user, limit, offset],
+                    `SELECT room, isOwner, isBanned, bannedUntil, member, memberSince, isMember, location, type, \`chat.rooms\`.server, \`chat.rooms\`.name FROM \`chat.rooms.members\` INNER JOIN \`chat.rooms\` ON \`chat.rooms.members\`.room = \`chat.rooms\`.id WHERE ${isUser? "member": isServer? "server": "room"} = ?`,
+                    [isUser? user: isServer? server: channel],
     
                     function(err, results) {
                         if(!err){
@@ -236,8 +274,10 @@ api = {
                                 return result
                             });
 
-                            cache.channelMemberships[user] = results;
-                        
+                            if      (isUser)    cache.memberships.user[user]       = results;
+                            else if (isServer)  cache.memberships.server[server]   = results;
+                            else if (isChannel) cache.memberships.channel[channel] = results;
+
                             return resolve(results)
                         } else resolve(null), console.log(err);
                     }
@@ -245,24 +285,26 @@ api = {
             })
         },
 
-        updatePresence(user, presence){
+        async updatePresence(user, presence){
             cache.presence[user] = presence;
 
-            // backend.broadcast(`maze.presence.${id}`, A2U8([
-            //     eventList.get("presence"),
-            //     msg.author,
-            //     msg.room,
-            //     msg.id,
-            //     msg.timestamp - globalTimeStart,
-            //     msg.attachments.replace(/[\[\]]/g, ""),
-            //     msg.mentions.replace(/[\[\]]/g, ""),
-            //     msg.text,
-            //     0
-            // ]), true, true)
+            let channels = await api.util.getMemberships(user);
+
+            backend.broadcast(`maze.presence.${id}`, A2U8([
+                eventList.get("presence"),
+                msg.author,
+                msg.room,
+                msg.id,
+                msg.timestamp - globalTimeStart,
+                msg.attachments.replace(/[\[\]]/g, ""),
+                msg.mentions.replace(/[\[\]]/g, ""),
+                msg.text,
+                0
+            ]), true, true)
         },
 
-        join(user){
-            cache.channelMemberships[user].push(membership)
+        join(user, channel){
+            cache.memberships.channel[channel].push(membership)
         }
     },
 
@@ -285,7 +327,7 @@ api = {
                     } : {},
 
                     ...User && includeChannels? {
-                        user_channels: await api.util.getChannels(User.id)
+                        user_channels: await api.util.getMemberships(User.id)
                     } : {},
 
                     latest_client: "0.3.0",
@@ -306,7 +348,7 @@ api = {
             case "list":
                 if(!User || User.error) return error(13);
                 
-                let results = await api.util.getChannels(User.id, +req.getQuery("limit") || 100, +req.getQuery("offset") || 0);
+                let results = await api.util.getMemberships(User.id);
                 return results? res.send(JSON.stringify(results)): error(24)
             break;
 
@@ -360,241 +402,232 @@ api = {
                 }
             break;
 
-            case "chat":
+            case "channels":
                 if(User.error) return error(13);
                 let id = shift();
 
-                switch(id){
-                    default:
+
+                switch(shift()){
+                    case "send": case "post":
                         id = +id;
-                        switch(shift()){
-                            case "send": case "post":
-                                res.wait = true;
+                        res.wait = true;
 
-                                req.parseBody(async (data, fail) => {
-                                    if(fail){
-                                        return error(fail)
-                                    }
+                        req.parseBody(async (data, fail) => {
+                            if(fail){
+                                return error(fail)
+                            }
 
-                                    data = data.json;
+                            data = data.json;
 
-                                    if(typeof data !== "object" || !data || !data.text || !id || typeof data.text !== "string"){
-                                        return error(2)
-                                    }
+                            if(typeof data !== "object" || !data || !data.text || !id || typeof data.text !== "string"){
+                                return error(2)
+                            }
 
-                                    if(data.text.length > 8000) {
-                                        return error(49)
-                                    }
+                            if(data.text.length > 8000) {
+                                return error(49)
+                            }
 
-                                    let msg = {
-                                        text: data.text,
-                                        mentions: Array.isArray(data.mentions) ? data.mentions.map(e => +e ).filter(e => !isNaN(e)) : "[]",
-                                        attachments: data.attachments || "[]",
-                                        author: User.id,
-                                        room: id,
-                                        timestamp: Date.now(),
-                                        type: 0
-                                    }
-    
-                                    response = await mazeDatabase.table("chat.messages").insert(msg)
-                                    
-                                    if(!response.err){
-                                        msg.id = response.result.insertId;
-    
-                                        // for(let v of Object.values(clients)){
-                                        //     if(v.listeners.message.includes(id)){
-                                        //         v.write([
-                                        //             eventList.get("message"),
-                                        //             msg.author,
-                                        //             msg.room,
-                                        //             msg.id,
-                                        //             msg.timestamp - globalTimeStart,
-                                        //             msg.attachments.replace(/[\[\]]/g, ""),
-                                        //             msg.mentions.replace(/[\[\]]/g, ""),
-                                        //             msg.text,
-                                        //             0
-                                        //         ])
-                                        //     }
-                                        // }
+                            let msg = {
+                                text: data.text,
+                                mentions: Array.isArray(data.mentions) ? data.mentions.map(e => +e ).filter(e => !isNaN(e)) : "[]",
+                                attachments: data.attachments || "[]",
+                                author: User.id,
+                                room: id,
+                                timestamp: Date.now(),
+                                type: 0
+                            }
 
-                                        backend.broadcast(`maze.messages.${id}`, A2U8([
-                                            eventList.get("message"),
-                                            msg.author,
-                                            msg.room,
-                                            msg.id,
-                                            msg.timestamp - globalTimeStart,
-                                            msg.attachments.replace(/[\[\]]/g, ""),
-                                            msg.mentions.replace(/[\[\]]/g, ""),
-                                            msg.text,
-                                            0
-                                        ]), true, true)
-    
-                                        res.send(JSON.stringify({id: msg.id}));
-                                    } else {
-                                        console.error(response.err);
-                                        return error(24)
-                                    }
-                                }).data()
-                            break;
+                            response = await mazeDatabase.table("chat.messages").insert(msg)
                             
-                            case "edit":
-                                res.wait = true;
+                            if(!response.err){
+                                msg.id = response.result.insertId;
 
-                                req.parseBody(async (data, fail) => {
-                                    if(fail){
-                                        return error(fail)
-                                    }
+                                // for(let v of Object.values(clients)){
+                                //     if(v.listeners.message.includes(id)){
+                                //         v.write([
+                                //             eventList.get("message"),
+                                //             msg.author,
+                                //             msg.room,
+                                //             msg.id,
+                                //             msg.timestamp - globalTimeStart,
+                                //             msg.attachments.replace(/[\[\]]/g, ""),
+                                //             msg.mentions.replace(/[\[\]]/g, ""),
+                                //             msg.text,
+                                //             0
+                                //         ])
+                                //     }
+                                // }
 
-                                    data = data.json;
+                                backend.broadcast(`maze.messages.${id}`, A2U8([
+                                    eventList.get("message"),
+                                    msg.author,
+                                    msg.room,
+                                    msg.id,
+                                    msg.timestamp - globalTimeStart,
+                                    msg.attachments.replace(/[\[\]]/g, ""),
+                                    msg.mentions.replace(/[\[\]]/g, ""),
+                                    msg.text,
+                                    0
+                                ]), true, true)
 
-                                    if(typeof data !== "object" || !data.text || !data.id || !id){
-                                        return error(2)
-                                    }
+                                res.send(JSON.stringify({id: msg.id}));
+                            } else {
+                                console.error(response.err);
+                                return error(24)
+                            }
+                        }).data()
+                    break;
+                    
+                    case "edit":
+                        id = +id;
 
-                                    let patch = {
-                                        edited: true
-                                    }
+                        res.wait = true;
 
-                                    if(data.text) patch.text = "" + data.text + "";
-                                    if(data.mentions) patch.mentions = data.mentions;
-                                    if(data.attachments) patch.attachments = data.attachments;
+                        req.parseBody(async (data, fail) => {
+                            if(fail){
+                                return error(fail)
+                            }
 
-                                    response = await mazeDatabase.table("chat.messages").update("where id=" + (+data.id), patch)
+                            data = data.json;
 
-                                    if(!response.err){
-                                        // for(let v of Object.values(clients)){
-                                        //     if(v.listeners.message.includes(id)){
-                                        //         v.write([
-                                        //             eventList.get("edit"),
-                                        //             id,
-                                        //             (+data.id),
-                                        //             (patch.text || ""),
-                                        //             (patch.mentions || "").replace(/[\[\]]/g, ""),
-                                        //             (patch.attachments || "").replace(/[\[\]]/g, "")
-                                        //         ])
-                                        //     }
-                                        // }
+                            if(typeof data !== "object" || !data.text || !data.id || !id){
+                                return error(2)
+                            }
 
-                                        backend.broadcast(`maze.messages.${id}`, A2U8([
-                                            eventList.get("edit"),
-                                            id,
-                                            (+data.id),
-                                            (patch.text || ""),
-                                            (patch.mentions || "").replace(/[\[\]]/g, ""),
-                                            (patch.attachments || "").replace(/[\[\]]/g, "")
-                                        ]), true, true)
-    
-                                        res.send(`{"success":true}`);
-                                    } else {
-                                        return error(24)
-                                    }
-                                }).data()
-                            break;
+                            let patch = {
+                                edited: true
+                            }
 
-                            case "delete":
-                                res.wait = true;
+                            if(data.text) patch.text = "" + data.text + "";
+                            if(data.mentions) patch.mentions = data.mentions;
+                            if(data.attachments) patch.attachments = data.attachments;
 
-                                req.parseBody(async (data, fail) => {
-                                    if(fail){
-                                        return error(fail)
-                                    }
+                            response = await mazeDatabase.table("chat.messages").update("where id=" + (+data.id), patch)
 
-                                    data = data.json;
+                            if(!response.err){
+                                // for(let v of Object.values(clients)){
+                                //     if(v.listeners.message.includes(id)){
+                                //         v.write([
+                                //             eventList.get("edit"),
+                                //             id,
+                                //             (+data.id),
+                                //             (patch.text || ""),
+                                //             (patch.mentions || "").replace(/[\[\]]/g, ""),
+                                //             (patch.attachments || "").replace(/[\[\]]/g, "")
+                                //         ])
+                                //     }
+                                // }
 
-                                    if(typeof data !== "object" || !data.id || !id){
-                                        return error(2)
-                                    }
+                                backend.broadcast(`maze.messages.${id}`, A2U8([
+                                    eventList.get("edit"),
+                                    id,
+                                    (+data.id),
+                                    (patch.text || ""),
+                                    (patch.mentions || "").replace(/[\[\]]/g, ""),
+                                    (patch.attachments || "").replace(/[\[\]]/g, "")
+                                ]), true, true)
 
-                                    let patch = {
-                                        deleted: true
-                                    }
-    
-                                    response = await mazeDatabase.table("chat.messages").update("where id=" + (+data.id), patch)
-                                    
-                                    if(!response.err){
-                                        // for(let v of Object.values(clients)){
-                                        //     if(v.listeners.message.includes(id)){
-                                        //         v.write([
-                                        //             eventList.get("delete"),
-                                        //             id,
-                                        //             (+data.id)
-                                        //         ])
-                                        //     }
-                                        // }
+                                res.send(`{"success":true}`);
+                            } else {
+                                return error(24)
+                            }
+                        }).data()
+                    break;
 
-                                        backend.broadcast(`maze.messages.${id}`, A2U8([
-                                            eventList.get("delete"),
-                                            id,
-                                            (+data.id)
-                                        ]), true, true)
-    
-                                        res.send(`{"success":true}`);
-                                    } else {
-                                        return error(24)
-                                    }
-                                }).data()
-                            break;
+                    case "delete":
+                        id = +id;
 
-                            case "read": case "get":
-                                if(!id){
-                                    return error(2)
-                                }
+                        res.wait = true;
 
-                                // Todo: Implement memory caching
+                        req.parseBody(async (data, fail) => {
+                            if(fail){
+                                return error(fail)
+                            }
 
-                                let query = (req.getQuery("id") && typeof +req.getQuery("id") == "number")? [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false and id =?`, [id, (+req.getQuery("id")) || 0]] : [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false order by id desc limit ${(+req.getQuery("limit")) || 10} offset ${(+req.getQuery("offset")) || 0}`, [id]];
-                                
-                                response = await mazeDatabase.query(...query)
-                                
-                                if(!response.err){
-                                    res.send(JSON.stringify(response.result.map(message => {
-                                        message.edited = !!message.edited[0]
-                                        return message
-                                    })))
-                                } else {
-                                    return error(response.err)
-                                }
-                            break;
+                            data = data.json;
 
-                            default:
-                                if(!id){
-                                    return error(2)
-                                }
+                            if(typeof data !== "object" || !data.id || !id){
+                                return error(2)
+                            }
 
-                                response = await mazeDatabase.query(`select * from \`chat.rooms\` where id=? LIMIT 1`, [id])
+                            let patch = {
+                                deleted: true
+                            }
 
-                                if(response.err){
-                                    console.log(response.err);
-                                    return error(24)
-                                }
+                            response = await mazeDatabase.table("chat.messages").update("where id=" + (+data.id), patch)
+                            
+                            if(!response.err){
+                                // for(let v of Object.values(clients)){
+                                //     if(v.listeners.message.includes(id)){
+                                //         v.write([
+                                //             eventList.get("delete"),
+                                //             id,
+                                //             (+data.id)
+                                //         ])
+                                //     }
+                                // }
 
-                                // TODO: improve, separate, and implement limits/offsets, etc
+                                backend.broadcast(`maze.messages.${id}`, A2U8([
+                                    eventList.get("delete"),
+                                    id,
+                                    (+data.id)
+                                ]), true, true)
 
-                                await new Promise(resolve => {
-                                    mazeDatabase.query(
-                                        `select member, isOwner, isBanned, bannedUntil, memberSince, isMember from \`chat.rooms.members\` WHERE room = ?`,
-                                        [id],
+                                res.send(`{"success":true}`);
+                            } else {
+                                return error(24)
+                            }
+                        }).data()
+                    break;
 
-                                        async function(err, results) {
-                                            if(!err){
+                    case "read": case "get":
+                        id = +id;
 
-                                                response = response.result[0]
-
-                                                response.members = results.map(result => {
-                                                    result.isOwner = !!result.isOwner[0]
-                                                    result.isBanned = !!result.isBanned[0]
-                                                    result.isMember = !!result.isMember[0]
-                                                    return result
-                                                })
-
-                                                return res.send(JSON.stringify(response));
-
-                                            } else return error(24), console.log(err);
-                                        }
-                                    )
-                                })
+                        if(!id){
+                            return error(2)
                         }
-                    }
+
+                        // Todo: Implement memory caching
+
+                        let query = (req.getQuery("id") && typeof +req.getQuery("id") == "number")? [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false and id =?`, [id, (+req.getQuery("id")) || 0]] : [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false order by id desc limit ${(+req.getQuery("limit")) || 10} offset ${(+req.getQuery("offset")) || 0}`, [id]];
+                        
+                        response = await mazeDatabase.query(...query)
+                        
+                        if(!response.err){
+                            res.send(JSON.stringify(response.result.map(message => {
+                                message.edited = !!message.edited[0]
+                                return message
+                            })))
+                        } else {
+                            return error(response.err)
+                        }
+                    break;
+
+                    default:
+                        if(!id){
+                            return error(2)
+                        }
+
+                        let channels = await api.util.getChannels(id.split(","))
+
+                        if(!channels || channels.err){
+                            console.log(channels.err);
+                            return error(24)
+                        }
+
+                        for(let channel of channels){
+                            if(!channel) continue;
+
+                            if(channel.location == 0){
+                                let members = await api.util.getMemberships(null, null, channel.id)
+                                if(members && !members.err){
+                                    channel.members = members;
+                                }
+                            }
+                        }
+                        
+                        return res.send(JSON.stringify(channels))
+                }
             break;
 
             case "join":

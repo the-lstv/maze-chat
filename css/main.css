@@ -326,7 +326,6 @@ ls-tab.tab-active {
     flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
-    min-width: 50vw;
     padding-top: 10em;
 }
 
