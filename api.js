@@ -17,16 +17,17 @@ let enc = new TextEncoder,
         "edit",
         "delete",
         "status",
+        "presence"
     ],
 
 
     cache = {
         profiles: {},
-        channelMemberships: {}
+        channelMemberships: {},
+        presence: {},
+        numConnections: {},
     }
 ;
-
-let userStatusCache = {};
 
 eventList.get = function(name){
     return eventList[eventList.indexOf(name)]
@@ -35,15 +36,17 @@ eventList.get = function(name){
 function A2U8(...data) {
     let result = [], i = 0;
     for(const event of data) {
-        if(!Array.isArray(event))continue;
-        let j = -1;
+        if(!Array.isArray(event)) continue;
+
+        let firstElementProcessed = false;
+
         for(const value of event){
-            j++;
             let number = value, encoded, isString = (typeof value == "string");
-            if(j == 0){
-                // Add event type if suitable
-                result.push(isString? eventList.indexOf(value) : value);
-                continue
+
+            if (!firstElementProcessed) {
+                result.push(isString ? eventList.indexOf(value) : value);
+                firstElementProcessed = true;
+                continue;
             }
 
             if(typeof value == "boolean"){
@@ -52,52 +55,49 @@ function A2U8(...data) {
             }
 
             if (isString){
+
                 if(value === ""){
                     result.push(21)
                     continue
                 }
+
                 encoded = encode(value)
                 number = encoded.length;
+
             } else if (value >= 0 && value <= 155) {
+
                 // Numbers 0 to 155 can have a dedicated byte
                 result.push(value + 100);
                 continue
+
             }
 
-            let a = [0];
-
-            // Use 64bit int bitshift operations to convert a 1-8 byte number to a 8 bit array
+            const bytes = [];
             number = BigInt(number);
-            for(let i = 0; i<8 ; i++){
-                a.push(
-                    Number(number & 0xFFn) >>> 0 //Unsigned
-                )
+
+            while (number > 0) {
+                bytes.push(Number(number & 0xFFn));
                 number >>= 8n;
             }
 
-            // Remove trailing 0s
-            let i = a.length - 1
-            while (i >= 0 && a[i] === 0) {
-                a.pop()
-                i--
+            const length = bytes.length;
+            if (length === 0) {
+                bytes.push(0);
             }
 
-            if(a.length < 2){
-                a.push(0, 0) // If 0
-            }
-
-            a[0] = a.length + (isString ? 9 : 1) // Assign type
-            result.push(...a);
+            result.push(length + (isString ? 10 : 2), ...bytes);
 
             if (isString){
                 result.push(...encoded)
             }
         }
+
         i++;
-        if(i != data.length && data.length != 1 && data[i].length > 0) result.push(0);
+
+        if(i != data.length && data[i].length > 0) result.push(0);
     }
-    result = result.map(b => Math.min(Math.abs(b), 255)).filter(b => typeof b == "number" && b < 256)
-    return new Uint8Array(result)
+
+    return new Uint8Array(result.filter(b => b < 256))
 }
 
 function U82A(bytes) {
@@ -201,14 +201,16 @@ api = {
                     profile.id = profile.link
                     delete profile.link
                     
-                    profile.onlineStatus = userStatusCache[profile.id] || 0;
-                    
                     cache.profiles[profile.id] = profile
                 }
             }
             
             for(let user of users){
-                if(cache.profiles[user]) result.push(cache.profiles[user]); else result.push({
+                if(cache.profiles[user]) {
+                    cache.profiles[user].presence = cache.presence[user] || 0;
+
+                    result.push(cache.profiles[user])
+                } else result.push({
                     user,
                     created: false
                 })
@@ -241,6 +243,22 @@ api = {
                     }
                 )
             })
+        },
+
+        updatePresence(user, presence){
+            cache.presence[user] = presence;
+
+            // backend.broadcast(`maze.presence.${id}`, A2U8([
+            //     eventList.get("presence"),
+            //     msg.author,
+            //     msg.room,
+            //     msg.id,
+            //     msg.timestamp - globalTimeStart,
+            //     msg.attachments.replace(/[\[\]]/g, ""),
+            //     msg.mentions.replace(/[\[\]]/g, ""),
+            //     msg.text,
+            //     0
+            // ]), true, true)
         },
 
         join(user){
@@ -399,7 +417,7 @@ api = {
                                         //     }
                                         // }
 
-                                        backend.broadcast(`maze.chatMessages.${id}`, A2U8([
+                                        backend.broadcast(`maze.messages.${id}`, A2U8([
                                             eventList.get("message"),
                                             msg.author,
                                             msg.room,
@@ -457,7 +475,7 @@ api = {
                                         //     }
                                         // }
 
-                                        backend.broadcast(`maze.chatMessages.${id}`, A2U8([
+                                        backend.broadcast(`maze.messages.${id}`, A2U8([
                                             eventList.get("edit"),
                                             id,
                                             (+data.id),
@@ -504,7 +522,7 @@ api = {
                                         //     }
                                         // }
 
-                                        backend.broadcast(`maze.chatMessages.${id}`, A2U8([
+                                        backend.broadcast(`maze.messages.${id}`, A2U8([
                                             eventList.get("delete"),
                                             id,
                                             (+data.id)
@@ -618,7 +636,7 @@ api = {
                         if(!response.err){
                             let msg_id = response.result.insertId;
 
-                            backend.broadcast(`maze.chatMessages.${data.channel}`, A2U8([
+                            backend.broadcast(`maze.messages.${data.channel}`, A2U8([
                                 eventList.get("message"),
                                 User.id,
                                 data.channel,
@@ -725,12 +743,14 @@ api = {
             // }, 100)
 
             ws.forget = (close = true) => {
-                if(!ws.alive) return;
-
-                if(close) ws.close()
-                ws.alive = false;
-                // clearInterval(ws.queueInterval);
-                delete clients[ws.uuid];
+                try {
+                    if(!ws.alive) return;
+    
+                    if(close) ws.close()
+                    ws.alive = false;
+                    // clearInterval(ws.queueInterval);
+                    delete clients[ws.uuid];
+                } catch {}
             }
 
             setTimeout(()=>{
@@ -763,20 +783,22 @@ api = {
                             ws.user = user
                             ws.authorized = true
 
+                            if(!cache.numConnections[user.id]) cache.numConnections[user.id] = 0;
+                            cache.numConnections[user.id]++;
 
-                            userStatusCache[user.id] = 1
+                            api.util.updatePresence(user.id, 1)
                         }
                     break;
 
                     case "message": break;
 
                     case "typing":
-                        backend.broadcast(`maze.chatMessages.${data[1]}`, A2U8([eventList.get("typing"), data[1], ws.user.id]), true)
+                        backend.broadcast(`maze.messages.${data[1]}`, A2U8([eventList.get("typing"), data[1], ws.user.id]), true)
                     break;
 
                     case "subscribe":
 
-                        if(data[1]) ws.subscribe(data[2]); else ws.unsubscribe(data[2])
+                        if(data[1]) ws.subscribe("maze." + data[2]); else ws.unsubscribe("maze." + data[2])
                         
                         // switch(data[2]){ //Event type
                         //     case 0:
@@ -796,6 +818,10 @@ api = {
         },
 
         close(ws, code, message){
+            cache.numConnections[ws.user.id]--;
+
+            if(cache.numConnections[ws.user.id] == 0) api.util.updatePresence(uws.ser.id, 0)
+
             ws.forget(false)
         }
     }

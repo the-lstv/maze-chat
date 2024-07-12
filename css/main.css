@@ -239,11 +239,6 @@ ls-tabs {
     height: 100%;
 }
 
-#intro-config {
-    transform: translateY(100%);
-    transition-duration: 1s;
-}
-
 ls-tab {
     transition-duration: 0.4s;
     transition-timing-function: ease;
@@ -252,14 +247,16 @@ ls-tab {
     bottom: 0;
     top: 0;
     position: absolute;
-    transform: translateX(-100%);
+    transform: scale(.95);
     opacity: 0;
     width: 100%;
+    z-index: 0;
 }
 
 ls-tab.tab-active {
     opacity: 1 !important;
     transform: unset !important;
+    z-index: 1000;
 }
 
 #home, #list, #room, #memberList, #homeContents, #noChannel {
@@ -657,13 +654,7 @@ pre {
     height: 32px;
     min-height: 32px;
     border-radius: 50%;
-    overflow: hidden;
     position: relative;
-}
-
-.list-avatar > img {
-    width: 100%;
-    height: 100%;
 }
 
 .list-item {
@@ -857,12 +848,54 @@ pre {
     }
 }
 
-#splash {
+.networkLoader {
+    height: 15px;
+    aspect-ratio: 4;
+    --_g: no-repeat radial-gradient(farthest-side,var(--color) 90%,#0000);
+    background: 
+      var(--_g) left, 
+      var(--_g) right;
+    background-size: 25% 100%;
+    display: grid;
+}
+
+.networkLoader:before,
+.networkLoader:after {
+    content: "";
+    height: inherit;
+    aspect-ratio: 1;
+    grid-area: 1/1;
+    margin: auto;
+    border-radius: 50%;
+    transform-origin: -100% 50%;
+    background: var(--color);
+    animation: l49 1s infinite linear;
+}
+.networkLoader:after {
+    transform-origin: 200% 50%;
+    --s:-1;
+    animation-delay: -.5s;
+}
+
+@keyframes l49 {
+    58%,
+    100% {transform: rotate(calc(var(--s,1)*1turn))}
+}
+
+#splash, #reconnection, #reconnection > ls-box {
     display: flex;
     justify-content: center;
     align-items: center;
+    flex-direction: column;
 }
 
+#reconnection {
+    position: fixed;
+    inset: 0;
+    z-index: 9999999;
+    background: #0004;
+    transition: .4s;
+}
 
 #messageLoader {
     position: absolute;
@@ -928,4 +961,33 @@ pre {
 
 .messageButtonGroup {
     display: flex;
+}
+
+.profile-presence-badge {
+    width: 30%;
+    height: 30%;
+    position: absolute;
+    bottom: 0px;
+    right: 0;
+    border-radius: 50%;
+    background: var(--accent);
+}
+
+.profile-avatar-source-container {
+    overflow: hidden;
+    border-radius: 50%;
+    height: 100%;
+    width: 100%;
+    z-index: 50;
+}
+
+.profile-avatar-source.has-badge {
+	/* Todo: needs improovements */
+    -webkit-mask: radial-gradient(circle at calc(100% - 17%) calc(100% - 16%),transparent 22%, #fff 22%);
+    mask: radial-gradient(circle at calc(100% - 17%) calc(100% - 16%),transparent 22%, #fff 22%);
+}
+
+.profile-avatar-source {
+    height: 100%;
+    width: 100%;
 }

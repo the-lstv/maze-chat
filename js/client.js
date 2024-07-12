@@ -27,7 +27,9 @@
             "typing",
             "authorize",
             "edit",
-            "delete"
+            "delete",
+            "status",
+            "presence"
         ]
     ;
 
@@ -35,68 +37,67 @@
         let result = [], i = 0;
         for(const event of data) {
             if(!Array.isArray(event)) continue;
-            let j = -1;
+
+            let firstElementProcessed = false;
+
             for(const value of event){
-                j++;
                 let number = value, encoded, isString = (typeof value == "string");
-                if(j == 0){
-                    // Add event type if suitable
-                    result.push(isString? eventList.indexOf(value) : value);
-                    continue
+
+                if (!firstElementProcessed) {
+                    result.push(isString ? eventList.indexOf(value) : value);
+                    firstElementProcessed = true;
+                    continue;
                 }
-    
+
                 if(typeof value == "boolean"){
                     result.push(value? 2 : 1);
                     continue
                 }
-    
+
                 if (isString){
+
                     if(value === ""){
                         result.push(21)
                         continue
                     }
+
                     encoded = encode(value)
                     number = encoded.length;
+
                 } else if (value >= 0 && value <= 155) {
+
                     // Numbers 0 to 155 can have a dedicated byte
                     result.push(value + 100);
                     continue
-                }
-    
-                let a = [0];
 
-                // Use 64bit int bitshift operations to convert a 1-8 byte number to a 8 bit array
+                }
+
+                const bytes = [];
                 number = BigInt(number);
-                for(let i = 0; i<8 ; i++){
-                    a.push(
-                        Number(number & 0xFFn) >>> 0 //Unsigned
-                    )
+
+                while (number > 0) {
+                    bytes.push(Number(number & 0xFFn));
                     number >>= 8n;
                 }
 
-                // Remove trailing 0s
-                let i = a.length - 1
-                while (i >= 0 && a[i] === 0) {
-                    a.pop()
-                    i--
+                const length = bytes.length;
+                if (length === 0) {
+                    bytes.push(0);
                 }
 
-                if(a.length < 2){
-                    a.push(0, 0) // If 0
-                }
-
-                a[0] = a.length + (isString ? 9 : 1) // Assign type
-                result.push(...a);
+                result.push(length + (isString ? 10 : 2), ...bytes);
 
                 if (isString){
                     result.push(...encoded)
                 }
             }
+
             i++;
-            if(i != data.length && data.length != 1 && data[i].length > 0) result.push(0);
+
+            if(i != data.length && data[i].length > 0) result.push(0);
         }
-        result = result.map(b => Math.min(Math.abs(b), 255)).filter(b => typeof b == "number" && b < 256)
-        return new Uint8Array(result)
+
+        return new Uint8Array(result.filter(b => b < 256))
     }
     
     function U82A(bytes) {
@@ -226,12 +227,12 @@
 
             async open(){
                 _this.isOpen = true;
-                _this.parent.internal_subscribe(true, `chatMessages.${_this.id}`)
+                _this.parent.internal_subscribe(true, `messages.${_this.id}`)
             }
 
             async close(){
                 _this.isOpen = false;
-                _this.parent.internal_subscribe(false, `chatMessages.${_this.id}`)
+                _this.parent.internal_subscribe(false, `messages.${_this.id}`)
             }
 
             sendTyping(){
@@ -251,6 +252,8 @@
                 let keys = Object.keys(_this.messageBuffer).reverse();
 
                 for(let i = from; i < limit + from; i++){
+                    if(i > keys.length - 1) break;
+
                     callback(_this.messageBuffer[keys[i]], i, _this.messageBuffer[keys[i + 1]])
                 }
             }
@@ -349,7 +352,7 @@
             constructor(gateway, options){
 
                 options = LS.Util.defaults({
-                    heartbeatInterval: 4000,
+                    heartbeatInterval: 8000,
                     heartbeatTimeout: 2000,
                 }, options)
 
@@ -381,6 +384,7 @@
                         switch(event[0]){
                             case "heartbeat":
                                 this.lastHeartbeat = Date.now()
+                                _this.invoke("heartbeat")
                             break;
 
                             case "message": 
@@ -425,7 +429,7 @@
                                 };
                             break;
 
-                            case "edit":
+                            case "presence":
                                 
                             break;
 
@@ -447,9 +451,12 @@
 
                             case "delete":
                                 if(this.chats[event[1]]){
-                                    this.chats[event[1]].invoke("delete", event[2]);
-                                    
+                                    let id = this.chats[event[1]].id;
+
+                                    if(this.chats[event[1]].messageBuffer[event[2]].renderBuffer) this.chats[event[1]].messageBuffer[event[2]].renderBuffer.remove()
                                     delete this.chats[event[1]].messageBuffer[event[2]]
+
+                                    this.chats[event[1]].invoke("delete", id);
                                 }
                             break;
 
@@ -639,8 +646,9 @@
                             _this.heartBeat = setInterval(async()=>{
                                 if((Date.now() - _this.lastHeartbeat) > (_this.options.heartbeatInterval + _this.options.heartbeatTimeout)){
                                     _this.invoke("heartbeat.miss")
+
                                     console.warn("[Mazec - Network] SKIPPED A HEARTBEAT!")
-                                } else _this.invoke("heartbeat");
+                                }
     
                                 if(!_this.socket){
                                     _this.die = true
@@ -661,6 +669,8 @@
                                     _this.send([0])
                                 }
                             }, _this.options.heartbeatInterval)
+
+                            _this.invoke("connect")
     
                             r(_this.socket)
                         })
@@ -668,6 +678,8 @@
                         _this.socket.addEventListener("close", async ()=>{
                             _this.socket = null;
                             console.log("[Mazec - Network] Connection lost")
+
+                            _this.invoke("disconnect")
 
                             setTimeout(_this.ensureSocket, 500)
                         })
@@ -684,7 +696,7 @@
                 if(typeof enable !== "boolean") throw "first argument must be a boolean";
 
                 _this.listening[event] = enable
-                _this.send(["subscribe", enable, `maze.${event}`])
+                _this.send(["subscribe", enable, `${event}`])
             }
     
             send(data){

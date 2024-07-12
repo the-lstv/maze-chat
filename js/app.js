@@ -99,7 +99,7 @@ M.on("load", async ()=>{
 
                 app.ui.fetchMessages(true, true) // Only prepares the view
 
-                let firstLoad = !app.client.chats[id], chat = await Mazec.chat(id)
+                let firstLoad = !app.client.chats[id], chat = await app.client.chat(id)
 
                 // Pre-fetch all profiles that are a part of the chat
                 await app.client.prefetchProfiles(chat.info.members.map(member => member.member))
@@ -150,18 +150,14 @@ M.on("load", async ()=>{
                         let element = chat.messageBuffer[buffer.id].renderBuffer;
     
                         if(element){
-                            element.get(".maze-message-text").set(app.renderMarkdown(buffer.text))
+                            element.get(".maze-message-text").set(app.renderMarkdown(buffer.text) + app.ui.editedMessageBadge)
                         }
                     })
     
                     chat.on("delete", (id) => {
                         if(app.activeChat.id !== chat.id) return;
 
-                        let element = chat.messageBuffer[id].renderBuffer;
-    
-                        if(element){
-                            element.remove()
-                        }
+                        app.ui.condenseMessages(Object.keys(app.activeChat.messageBuffer).indexOf(`${id - 5}`) + 1, 15)
                     })
     
                     chat.on("typing", async (id) => {
@@ -193,16 +189,14 @@ M.on("load", async ()=>{
                 app.ui.memberList.get(".list-items").clear();
 
                 for(let member of app.activeChat.info.members){
-                    let profile = await Mazec.profile(member.member);
+                    let profile = await app.client.profile(member.member);
 
                     app.ui.memberList.get(".list-items").add(N({
                         class: "list-item" + (profile.nsfw? " nsfw": ""),
                         inner: [
                             N({
                                 class: "list-avatar",
-                                inner: N("img", {
-                                    src: app.getAvatar(profile.avatar, 32)
-                                })
+                                inner: app.getAvatar(profile, 32, true)
                             }),
 
                             N("span", {innerText: profile.displayname}),
@@ -264,7 +258,7 @@ M.on("load", async ()=>{
                 let userList = [];
 
                 for(let user of typingUsers){
-                    userList.push((await Mazec.profile(user)).displayname)
+                    userList.push((await app.client.profile(user)).displayname)
                 }
 
                 O(".typingUsersText").set(`${userList.join(", ")} ${userList.length > 1? "are": "is"} typing`)
@@ -339,21 +333,15 @@ M.on("load", async ()=>{
             },
 
             condenseMessages(from, limit){
-
                 app.activeChat.traverseLocal(from, limit, (thisBuffer, i, nextBuffer) => {
                     if(!thisBuffer) return;
 
                     let condense = !!nextBuffer && nextBuffer.type == 0 && nextBuffer.author === thisBuffer.author && (thisBuffer.timestamp - nextBuffer.timestamp) < 300000;
                     if(thisBuffer.renderBuffer) thisBuffer.renderBuffer.class("condensed", condense)
                 })
-                
-                // let list = O("#messageArea").getAll(".maze-message");
-                
-                // for(let i = 0; i < list.length; i++){
-                //     let prevBuffer = i == 0? null : app.activeChat.messageBuffer[list[i-1].messageID];
-                //     let thisBuffer = app.activeChat.messageBuffer[list[i].messageID];
-                // }
-            }
+            },
+
+            editedMessageBadge: "<span style='font-size:small;color:gray;margin-left:8px'>(Edited)</span>"
         },
 
         chats: {},
@@ -500,7 +488,7 @@ M.on("load", async ()=>{
 
             switch(messageBuffer.type){
                 case 0:
-                    messageContent = app.renderMarkdown(messageBuffer.text);
+                    messageContent = app.renderMarkdown(messageBuffer.text) + (messageBuffer.edited? app.ui.editedMessageBadge : "");
                 break;
                 case 2:
                     messageContent = [
@@ -523,7 +511,7 @@ M.on("load", async ()=>{
 
                     ...messageBuffer.type == 0? [
                         N({inner: [
-                            N("img", {src: app.getAvatar(profile.avatar), draggable: false, onload(){ this.parentElement.loading = false }})
+                            app.getAvatar(profile)
                         ], class: "maze-message-avatar", attr: {"load": "solid"}, onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
     
                         N({inner: [
@@ -582,8 +570,26 @@ M.on("load", async ()=>{
             return element
         },
 
-        getAvatar(hash, size = 80){
-            return "https://cdn.extragon.cloud/file/" + (hash || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!hash || hash.endsWith("svg")? "" : "?size=" + size)
+        getAvatar(profile, size = 80, badge = false){
+            if(typeof profile === "string") profile = {avatar: profile}
+
+            let element = N({
+                class: "profile-avatar-source-container",
+                attr: {"user-id": profile.id || ""},
+                inner: [
+                    N(profile.avatar && (profile.avatar.endsWith("webm") || profile.avatar.endsWith("mp4"))? "video": "img", {
+                        src: "https://cdn.extragon.cloud/file/" + (profile.avatar || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!profile.avatar || profile.avatar.endsWith("svg")? "" : "?size=" + size),
+                        class: "profile-avatar-source" + (badge? " has-badge": ""),
+                        draggable: false
+                    }),
+                    badge? N({
+                        class: "profile-presence-badge",
+                        accent: profile.presence == 0? "gray": "green"
+                    }): ""
+                ]
+            })
+
+            return element
         },
 
         async showProfile(id, x = M.x, y = M.y){
@@ -616,7 +622,7 @@ M.on("load", async ()=>{
             
             container.get(".profile-bot-badge").style.display = profile.bot? "inline-block": "none";
 
-            container.get(".profile-avatar img").src = app.getAvatar(profile.avatar, 256);
+            container.get(".profile-avatar").set(app.getAvatar(profile, 256));
 
             container.getAll(".profile-banner :is(video, img)").all().applyStyle({display: "none"})
 
@@ -636,7 +642,7 @@ M.on("load", async ()=>{
         async temporary_renderPubliChannels(){
             O("#list .list-items").clear();
 
-            let channels = app.client.initialChannelCache || await Mazec.listChannels();
+            let channels = app.client.initialChannelCache || await app.client.listChannels();
             app.client.initialChannelCache = null;
 
             for(let channel of channels){
@@ -684,9 +690,7 @@ M.on("load", async ()=>{
 
         let profile = await app.client.profile(app.client.user.id), profileBar = O("#profileBar");
         
-        profileBar.get(".list-avatar").set(N("img", {
-            src: app.getAvatar(profile.avatar, 32)
-        }))
+        profileBar.get(".list-avatar").set(app.getAvatar(profile, 32, true))
 
         profileBar.get(".profileBarName").set(N({innerText: profile.displayname}))
 
@@ -711,6 +715,20 @@ M.on("load", async ()=>{
                 console.log("Should load more");
             }
         })
+
+
+        app.client.on("heartbeat.miss", () => {
+            O("#reconnection").style.display = "flex"
+        })
+
+        app.client.on("disconnect", () => {
+            O("#reconnection").style.display = "flex"
+        })
+
+        app.client.on("heartbeat", () => {
+            O("#reconnection").style.display = "none"
+        })
+
 
         O("#messageButtons").on("click", () => O("#messageButtons").applyStyle({display: "none"}))
 
