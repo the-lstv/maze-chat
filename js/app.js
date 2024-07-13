@@ -23,10 +23,10 @@ M.on("load", async ()=>{
             messageSampleSize: 50
         },
 
-        emojiMap: {
-            ':smile:': 'https://cdn.discordapp.com/emojis/752860480758087711.gif?size=128&quality=lossless',
-            ':yeah:': 'https://cdn.discordapp.com/emojis/1083458064696475758.webp?size=128&quality=lossless'
-        },
+        // emojiMap: {
+        //     ':smile:': 'https://cdn.discordapp.com/emojis/752860480758087711.gif?size=128&quality=lossless',
+        //     ':yeah:': 'https://cdn.discordapp.com/emojis/1083458064696475758.webp?size=128&quality=lossless'
+        // },
 
         awaitingMessage: null,
 
