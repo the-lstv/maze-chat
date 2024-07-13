@@ -14,3 +14,23 @@ Then hot-reload/full-reload Akeno and you are done.
 If you live in the future, you can also do `akeno get the-lstv/maze-chat` and be done with it.
 
 ![Screenshot from 2024-07-13 14-32-11](https://github.com/user-attachments/assets/6ea9dbbd-cf11-43f6-9424-b4931d37cfb2)
+
+
+## Performance
+I have no direct (self-hostable) comparsion, but I think Maze is pretty fast, and about to get much faster.<br>
+For example - compared to Discord:<br><br>
+**(Both tested in the same conditions, caching disabled, NOT including images, NOT including preflights, fresh Chrome instances, and no I did not test on localhost)**
+
+### Loading speed:
+| Platform | Load time | No. of requests | Size of resources | Consumed RAM | Scripting time | Rendering time |
+|-|-|-|-|-|-|-|
+| Discord | 7.6 seconds | 121 | 25.3MB | 110MB | 1904ms | 178ms |
+| Maze | 0.7 seconds | 21 | 717kB (0.7MB) | 3MB | 49ms | 35ms |
+
+... And as you can see, Maze singlehandedly wins every benchmark. Especially the memory consumption and scripting time - Discord consumes 107MB more than Maze! <br>
+This is because Maze is much, much more lightweight than Discord, and is also written from scratch, using vanilla technologies, instead of Discord's vast amount of bloat.<br><br>
+Maze is also more optimized and efficient, built for a purpose, and does not re-send data that it does not need.<br>
+Instead of using JSON for its WebSocket communication, Maze uses a special binary encoding which can be as tiny as 18 bytes for a received message! How much does Discord need for the same? 927 bytes(!!), somehow
+
+### Latency and efficiency of requests/realtime data
+uhh ill add it leter
