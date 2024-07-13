@@ -10,3 +10,5 @@ Everything runs under Akeno, and as stated in /app.conf, the /js/backend.js is a
 **How to run:** <br>
 Get Akeno, then clone this repository, change to your domain (in app.conf) and add the local path to the "config" file in Akeno. <br>
 Then hot-reload/full-reload Akeno and you are done.
+<br>
+If you live in the future, you can also do `akeno get the-lstv/maze-chat` and be done with it.
