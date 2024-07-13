@@ -24,8 +24,8 @@ For example - compared to Discord:<br>
 ### Loading speed:
 | Platform | Load time | No. of requests | Size of resources | Consumed RAM | Scripting time | Rendering time |
 |-|-|-|-|-|-|-|
-| Discord | 7.6 seconds | 121 | 508kB | 110MB | 1904ms | 178ms |
-| Maze | 0.7 seconds | 21 | 2.5kB | 3MB | 49ms | 35ms |
+| Discord | 7.6 seconds | 121 | 25.3MB | 110MB | 1904ms | 178ms |
+| Maze | 0.7 seconds | 21 | 717kB | 3MB | 49ms | 35ms |
 
 ... And as you can see, Maze singlehandedly wins every benchmark. Especially the memory consumption - Discord consumes 107MB more than Maze!<br>
 This is because Maze is much, much more lightweight than Discord, and is also written from scratch, using vanilla technologies, instead of Discord's vast amount of bloat.
