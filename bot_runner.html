@@ -12,19 +12,10 @@
 
         bootstrap-icons;
     }
+
 </head>
 
 <body>
-    <div %log></div>
-
-    <script>
-        let _console = console.log;
-        console.log = console.error = console.log = console.debug = function(...data){
-            O("#log").add(N({class: "line", innerText: data.join(" ")}))
-            _console(...data)
-        }
-    </script>
-
     <script>
         let client = new MazecClient("https://api.extragon.cloud/v2/mazec");
 
@@ -36,12 +27,8 @@
 
             console.log("Bot logged in as", fragment.id);
 
-            console.log("Bot is connected and running!");
-
             async function listenToChat(id){
                 let chat = await client.chat(id)
-    
-                if(chat.error) throw chat.error; // For example, the bot does not have permissions
 
                 chat.open()
 
@@ -62,6 +49,17 @@
                 listenToChat(channel.room)
             }
         })
+    </script>
+
+    <div %log></div>
+
+    <script>
+        // misc, just to display console messages in the document;
+        let _console = console.log;
+        console.log = console.error = console.log = console.debug = function(...data){
+            O("#log").add(N({class: "line", innerText: data.join(" ")}))
+            _console(...data)
+        }
     </script>
 
     <style>
