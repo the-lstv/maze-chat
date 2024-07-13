@@ -28,7 +28,7 @@ For example - compared to Discord:<br><br>
 | Maze | 0.7 seconds | 21 | 717kB (0.7MB) | 3MB | 49ms | 35ms |
 
 ... And as you can see, Maze singlehandedly wins every benchmark. Especially the memory consumption and scripting time - Discord consumes 107MB more than Maze! <br>
-This is because Maze is much, much more lightweight than Discord, and is also written from scratch, using vanilla technologies, instead of Discord's vast amount of bloat.<br>
+This is because Maze is much, much more lightweight than Discord, and is also written from scratch, using vanilla technologies, instead of Discord's vast amount of bloat.<br><br>
 Maze is also more optimized and efficient, built for a purpose, and does not re-send data that it does not need.<br>
 Instead of using JSON for its WebSocket communication, Maze uses a special binary encoding which can be as tiny as 18 bytes for a received message! How much does Discord need for the same? 927 bytes(!!), somehow
 
