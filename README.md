@@ -13,7 +13,7 @@ Then hot-reload/full-reload Akeno and you are done.
 <br>
 If you live in the future, you can also do `akeno get the-lstv/maze-chat` and be done with it.
 
-![Screenshot from 2024-07-13 14-32-11](https://github.com/user-attachments/assets/6ea9dbbd-cf11-43f6-9424-b4931d37cfb2)
+![Screenshot from 2024-07-13 23-36-00](https://github.com/user-attachments/assets/d00e3d2a-e656-4679-a26e-ced8ef1c6ff7)
 
 
 ## Performance
