@@ -12,3 +12,5 @@ Get Akeno, then clone this repository, change to your domain (in app.conf) and a
 Then hot-reload/full-reload Akeno and you are done.
 <br>
 If you live in the future, you can also do `akeno get the-lstv/maze-chat` and be done with it.
+
+![Screenshot from 2024-07-13 14-32-11](https://github.com/user-attachments/assets/6ea9dbbd-cf11-43f6-9424-b4931d37cfb2)
