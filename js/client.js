@@ -17,7 +17,9 @@
         dec = new TextDecoder,
         encode = (text) => enc.encode(text),
         decode = (bytes) => dec.decode(bytes),
-        version = "0.3.0",
+
+        version = "0.5.0",
+
         globalTimeStart = 1697840000000,
         eventList = [
             "heartbeat",
@@ -29,7 +31,8 @@
             "edit",
             "delete",
             "status",
-            "presence"
+            "presence",
+            "versionCheck"
         ]
     ;
 
@@ -352,21 +355,21 @@
             constructor(gateway, options){
 
                 options = LS.Util.defaults({
-                    heartbeatInterval: 5000,
-                    heartbeatTimeout: 6000,
+                    heartbeatInterval: 8000,
+                    heartbeatTimeout: 650, // Max time of not responding before the connection should be considered offline
                 }, options)
 
                 _this = this;
-    
+
                 this.queue = [];
                 this.listening = {};
 
                 this.user = {};
-    
+
                 this.profileCache = {};
-    
+
                 this.lastHeartbeatStarted = this.lastHeartbeat = Date.now()
-    
+
                 if(!(window.LS? LS.EventResolver : false) && !options.EventResolver){
                     throw "Failed initializing MazecClient; No suitable event system provided. Please make sure that LS is available and accesible or provide your own with the EventResolver option."
                 }
@@ -430,7 +433,8 @@
                             break;
 
                             case "presence":
-                                
+                                if(app.client.profileCache[event[1]]) app.client.profileCache[event[1]].presence = event[2];
+                                _this.invoke("presence", event[1], event[2])
                             break;
 
                             case "edit":
@@ -481,6 +485,15 @@
                                     }, 10000)
                                 }
                             break;
+
+                            case "versionCheck":
+                                app.client.server.lowest_client = event[1]
+                                app.client.server.latest_client = event[2]
+
+                                if(_this.checkVersion(event[1]) == -1){
+                                    _this.invoke("error.outdatedClient")
+                                }
+                            break;
                         }
                     }
                 })
@@ -520,7 +533,7 @@
                     _this.user.fragment = conn.user_fragment
 
                     if(!_this.user.token) {
-                        return callback("No user is logged in")
+                        return callback({error: "No user is logged in"})
                     }
 
                     if(conn.user_profile){
@@ -532,7 +545,8 @@
                     }
 
                     if(_this.checkVersion(conn.lowest_client) == -1){
-                        return callback(`Mazec client is too outdated (minimum supported is ${conn.lowest_client}, current is ${version})`)
+                        _this.invoke("error.outdatedClient")
+                        return callback({error: `outdated`})
                     }
 
                     if(!conn.user_profile){
@@ -545,7 +559,7 @@
                     await _this.ensureSocket()
 
                     return callback(conn.user_fragment)
-                } else return callback(false)
+                } else return callback({error: conn})
             }
     
             request(endpoint = "", options = {}){
@@ -586,7 +600,11 @@
                     for(let profile of data){
                         if(typeof profile !== "object" || profile.created === false){
                             result.push(profile)
-                            continue
+
+                            if(profile.created === false){
+                                console.log(profile.user, profile.id);
+                                if(profile.user) profile.id = profile.user;
+                            } else continue;
                         }
         
                         _this.profileCache[profile.id] = _this._cleanProfile(profile)
@@ -612,6 +630,7 @@
 
             _cleanProfile(profile){
                 profile.created = true
+                if(profile.id === app.client.user.id) profile.presence = 1;
                 if(profile.colors) profile.colors = profile.colors.split(",").map(color => window.C? C(color): color)
                 return profile
             }
@@ -644,7 +663,7 @@
                             if(_this.heartBeat) clearInterval(_this.heartBeat);
     
                             _this.heartBeat = setInterval(async()=>{
-                                if((Date.now() - _this.lastHeartbeat) > _this.options.heartbeatTimeout){
+                                if((Date.now() - _this.lastHeartbeat) > (_this.options.heartbeatTimeout + _this.options.heartbeatInterval)){
                                     _this.invoke("heartbeat.miss")
 
                                     console.warn("[Mazec - Network] SKIPPED A HEARTBEAT!")

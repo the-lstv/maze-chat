@@ -19,10 +19,11 @@
 
         bootstrap-icons;
     }
+
 </head>
 
 <page>
-    <main %main message-style="channel">
+    <main %main message-style="channel" .mainContentTabs>
 
         <ls-tab %splash>
             <div .messageLoader></div>
@@ -30,9 +31,20 @@
 
 
         <ls-tab %error>
-            <ls-box ls-accent="red" class="fill">
-                <i class="bi-bug-fill"></i>
-            </ls-box>
+            <i .bi-bug-fill></i>
+        </ls-tab>
+
+
+        <ls-tab %outdated>
+            <i .bi-clock-history></i>
+
+            <div>
+                <h2>Updates!</h2>
+                Your client seems to be outdated! <br>
+                Reloading might help?
+            </div> <br>
+
+            <button ls-accent="gray" onclick="location.reload()">Reload</button>
         </ls-tab>
 
 
@@ -69,8 +81,77 @@
         </ls-tab>
 
         <ls-tab %settings>
-            <h1><i .bi-sign-turn-left-fill></i> work in progress</h1>
-            <button onclick="app.screen.setActive('home')">go back</button>
+                <style>
+                
+                </style>
+                
+                <div .sidebar-container>
+                    <div .sidebar %accountManageSidebar>
+                        <div .sidebar-items>
+                            <span .sidebar-label>User settings</span>
+                            <div .list-item .sidebar-item .selected>
+                                <i .bi-person-fill></i>
+                                Profile
+                            </div>
+                            <hr>
+                            <div .list-item .sidebar-item style="color: rgb(219, 67, 67)" onclick="localStorage.clear(); location.reload()">
+                                <i .bi-door-closed-fill></i>
+                                Log out
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div .sidebar-content-wrapper>
+                        <div .sidebar-content>
+                            <ls-tabs>
+                                <ls-tab %settings.profile>
+                                    <h2>Profile</h2>
+    
+                                    <br>
+    
+                                    <ls-box .color ls-accent="orange"><i .bi-info></i> Currently your LSTV account and Maze profiles are separate and not synchronized. Your display name or avatar on LSTV will not be visible to Maze users and vice versa.</ls-box> <br> <br>
+    
+                                    <div .profileEditorWrapper>
+                                        <div .profileEditorContentWrapper>
+                                            <div>
+                                                <span .sidebar-label>Display name</span> <br>
+                                                <input type="text">
+                                            </div>
+    
+                                            <div>
+                                                <span .sidebar-label>Avatar</span> <br>
+                                                <input type="file" hidden>
+    
+                                                <ls-group join>
+                                                    <button><i .bi-person-bounding-box></i> Change</button>
+                                                    <button ls-accent="gray">Remove</button>
+                                                </ls-group>
+                                            </div>
+    
+                                            <div>
+                                                <span .sidebar-label>Banner</span> <br>
+                                                <input type="file" hidden>
+    
+                                                <ls-group join>
+                                                    <button><i .bi-person-bounding-box></i> Change</button>
+                                                    <button ls-accent="gray">Remove</button>
+                                                </ls-group>
+                                            </div>
+    
+                                            <div>
+                                                <span .sidebar-label>About me</span> <br>
+                                                <textarea %profileEditorBio></textarea>
+                                            </div>
+                                        </div>
+                                        <div .profileEditorPreviewWrapper>
+                                            <span .sidebar-label>Preview</span> <br>
+                                        </div>
+                                    </div>
+                                </ls-tab>
+                            </ls-tabs>
+                        </div>
+                    </div>
+                </div>
         </ls-tab>
 
         <ls-tab %home>
@@ -88,9 +169,11 @@
                             <i .bi-plus-lg></i>
                         </div>
                     </div>
-                    <div .list-items %channelList>
-        
-                    </div>
+                    <ls-tabs %channelList>
+                        <ls-tab .list-items %publicChannelList>
+                            
+                        </ls-tab>
+                    </ls-tabs>
                 </div>
 
                 <div %profileBar>
@@ -104,7 +187,7 @@
                 </div>
             </div>
 
-            <ls-tabs %homeContents>
+            <ls-tabs %homeContents .mainContentTabs>
                 <ls-tab %noChannel>
                     <i .bi-chat-dots></i>
                     <br>
@@ -115,12 +198,23 @@
                     <div %messageLoader>
                         <div .messageLoader></div>
                     </div>
-    
-                    <div %messageArea></div>
+                    
+                    
+                    <div %messageArea>
+                        <div %mesageDisplayContainer>
+                            <div .channelStart>
+                                <div .channelCircularBadge></div>
+                                <h2>Welcome to <ls-box .inline .color ls-accent="auto">#<span .channelName></span></ls-box>!</h2>
+                                <h3>This is the beginning of the channel.</h3>
+                                <hr>
+                            </div>
+                            <div %messageContainer></div>
+                        </div>
+                    </div>
     
                     <div %messageButtons hidden>
                         <div onclick='LS.Toast.show("This feature is not implemented yet!", {accent: "red", timeout: 2000})' .messageButton ls-tooltip="React" .messageReactButton><i .bi-emoji-smile-fill></i></div>
-                        <div onclick='LS.Toast.show("This feature is not implemented yet!", {accent: "red", timeout: 2000})' .messageButton ls-tooltip="Reply" .messageReplyButton><i .bi-reply-fill></i></div>
+                        <div onclick='app.ui.activeMessageReply()' .messageButton ls-tooltip="Reply" .messageReplyButton><i .bi-reply-fill></i></div>
                         <div onclick="app.ui.activeMessageCopy()" .messageButton ls-tooltip="Copy text" .messageCopyButton><i .bi-clipboard-fill></i></div>
                         <div onclick="app.ui.activeMessageCopyID()" .messageButton ls-tooltip="Copy message ID" .messageCopyButton><i .bi-clipboard-data></i></div>
                         <div .messageButtonGroup .ownMessageButtons>
@@ -136,18 +230,20 @@
                         </div>
     
                         <ls-group join %messageBox>
-                            <div role="button" .messageBoxButton>
-                                <i .bi-plus-circle-fill></i>
-                            </div>
-    
-                            <div %messageContent></div>
-    
-                            <div title="Emoji picker" role="button" onclick="app.ui.emojiPicker()" .messageBoxButton>
-                                <i .bi-emoji-laughing-fill></i>
-                            </div>
-    
-                            <div title="Send message" role="button" onclick="app.ui.send()" .messageBoxButton .sendButton>
-                                <i .bi-send-fill></i>
+                            <div .messageEditorContainer>
+                                <div role="button" .messageBoxButton>
+                                    <i .bi-plus-circle-fill></i>
+                                </div>
+        
+                                <div %messageContent></div>
+        
+                                <div title="Emoji picker" role="button" onclick="app.ui.emojiPicker()" .messageBoxButton>
+                                    <i .bi-emoji-laughing-fill></i>
+                                </div>
+        
+                                <div title="Send message" role="button" onclick="app.ui.send()" .messageBoxButton .sendButton>
+                                    <i .bi-send-fill></i>
+                                </div>
                             </div>
                         </ls-group>
                     </div>
@@ -243,12 +339,6 @@
 
     <style>
         /* Styles that have to be available immediately */
-        :root {
-            --font: Montserrat;
-            -webkit-user-select: none;
-            user-select: none;
-        }
-
         body {
             width: 100vw;
             height: 100vh;

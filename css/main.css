@@ -3,6 +3,7 @@
 
 :root {
     --messageBox-height: 20px;
+	--font: Montserrat;
 }
 
 
@@ -13,6 +14,8 @@ main {
     position: fixed;
     top: 0;
     left: 0;
+	-webkit-user-select: none;
+	user-select: none;
 }
 
 #decide {
@@ -28,18 +31,24 @@ main {
     width: 40vw;
 }
 
-#login, #noChannel {
+/* Im pretty sure this should have been a class... */
+#splash, #outdated, #reconnection, #reconnection > ls-box, #messageLoader, #login, #noChannel {
     display: flex;
-    align-items: center;
     justify-content: center;
-}
-
-#noChannel {
-    text-align: center;
+    align-items: center;
     flex-direction: column;
 }
 
-#noChannel i {
+#outdated h2 {
+	margin: 0;
+}
+
+#outdated {
+	text-align: center;
+	gap: 10px;
+}
+
+#noChannel > i, #outdated > i {
     font-size: 8rem;
     color: var(--transparent-overlay-strong);
 }
@@ -233,13 +242,13 @@ main {
     text-decoration: underline;
 }
 
-ls-tabs {
+.mainContentTabs {
     display: flex;
     width: 100%;
     height: 100%;
 }
 
-ls-tab {
+.mainContentTabs > ls-tab {
     transition-duration: 0.4s;
     transition-timing-function: ease;
     left: 0;
@@ -253,7 +262,7 @@ ls-tab {
     z-index: 0;
 }
 
-ls-tab.tab-active {
+.mainContentTabs > ls-tab.tab-active {
     opacity: 1 !important;
     transform: unset !important;
     z-index: 1000;
@@ -326,7 +335,8 @@ ls-tab.tab-active {
     flex-direction: column;
     overflow-y: auto;
     overflow-x: hidden;
-    padding-top: 10em;
+    padding-top: 25px;
+	padding-bottom: 1.8em;
 }
 
 #messageArea > *:first-child {
@@ -349,6 +359,11 @@ ls-tab.tab-active {
     background: var(--ui);
     min-height: calc(1em + var(--messageBox-height));
     padding: 0 2px;
+}
+
+.messageEditorContainer {
+	display: flex;
+    width: 100%;
 }
 
 .messageBoxButton {
@@ -625,8 +640,12 @@ pre {
     margin: 0;
 }
 
-[ls-theme="light"] #messageBox {
+[ls-theme="light"] #messageBox, [ls-theme="light"] #profileBar {
     background: var(--elevate-0);
+}
+
+[ls-theme="light"] .profile-box {
+	background: var(--color-bg);
 }
 
 .list-items {
@@ -634,7 +653,7 @@ pre {
     display: flex;
     flex-direction: column;
     padding: 10px;
-    gap: 8px;
+    gap: 4px;
     overflow-y: auto;
 }
 
@@ -673,8 +692,8 @@ pre {
 }
 
 #list .list-items .list-item {
-    background: var(--elevate);
-    padding: 8px 15px;
+	padding: 8px 12px;
+    padding-left: 16px;
 }
 
 #channelOrganizer {
@@ -700,7 +719,7 @@ pre {
 .serverIcon {
     width: 50px;
     height: 50px;
-    background-color: var(--elevate-1);
+    background-color: var(--elevate-0);
     /* overflow: hidden; */
     cursor: pointer;
     display: flex;
@@ -725,7 +744,7 @@ pre {
     background: var(--accent);
 }
 
-.serverIcon::before {
+.serverIcon::before, .channel.unread::before {
     content: "";
     position: absolute;
     left: -10px;
@@ -734,10 +753,17 @@ pre {
     width: 4px;
     background: var(--color);
     border-radius: 0 20px 20px 0;
+	transition: .2s;
 }
 
 .serverIcon:hover::before {
     opacity: 1;
+    height: 30%;
+}
+
+.serverIcon:hover::before, .channel.unread::before {
+    opacity: 1;
+	width: 5px;
     height: 30%;
 }
 
@@ -750,8 +776,23 @@ pre {
     flex: 1;
 }
 
+.channel {
+    position: relative;
+	color: var(--elevate-4);
+}
+
+.channel.selected, .sidebar-item.selected {
+    background: var(--elevate);
+    color: var(--color);
+}
+
+.channel.unread {
+    font-weight: 600;
+	color: var(--color);
+}
+
 .list-item.channel > i {
-    transform: scale(1.2) translateX(-5px);
+	transform: scale(1.4) translateX(-6px);
     opacity: .4;
 }
 
@@ -881,13 +922,6 @@ pre {
     100% {transform: rotate(calc(var(--s,1)*1turn))}
 }
 
-#splash, #reconnection, #reconnection > ls-box {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-}
-
 #reconnection {
     position: fixed;
     inset: 0;
@@ -900,8 +934,6 @@ pre {
     position: absolute;
     inset: 0;
     display: none;
-    align-items: center;
-    justify-content: center;
 }
 
 .sent-message-waiting {
@@ -989,4 +1021,121 @@ pre {
 .profile-avatar-source {
     height: 100%;
     width: 100%;
+}
+
+.channelCircularBadge {
+	background: var(--elevate-1);
+    position: relative;
+    display: inline-block;
+    border-radius: 50%;
+    font-size: 4em;
+    width: 80px;
+    height: 80px;
+	margin-bottom: 15px;
+}
+
+.channelCircularBadge::after {
+	content: "\f40a";
+    font-family: bootstrap-icons;
+    font-weight: 400 !important;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-53%, -50%);
+}
+
+.channelStart {
+    padding: 2px 20px;
+}
+
+.channelStart :is(h1, h2, h3) {
+    margin: 0;
+}
+
+.channelStart ls-box {
+	border-radius: 30px;
+    padding: 2px 16px;
+    margin: 0 3px;
+    margin-left: 0;
+    text-transform: lowercase;
+}
+
+.channelStart hr {
+    margin-top: 25px;
+	border-top: none;
+}
+
+.sidebar {
+    width: 35%;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.sidebar-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+.sidebar-items {
+    height: 100%;
+    gap: 5px;
+    display: flex;
+    flex-direction: column;
+    width: 230px;
+    min-width: 230px;
+    padding: 15px;
+    padding-right: 20px;
+	overflow-y: auto;
+}
+
+.sidebar-content-wrapper {
+    width: 100%;
+    height: 100%;
+    flex: 1;
+    background: var(--elevate);
+	padding: 0 3em;
+	overflow-y: auto;
+}
+
+.sidebar-content {
+    max-width: 620px;
+}
+
+.sidebar-item {
+    padding: 6px 12px;
+    display: flex;
+    gap: 10px;
+}
+
+.sidebar-label {
+    text-transform: uppercase;
+    font-size: small;
+    font-weight: 600;
+    color: var(--elevate-4);
+    margin-bottom: 5px;
+    margin-left: 12px;
+}
+
+.sidebar hr {
+	border-bottom: none;
+}
+
+.sidebar, .sidebar-content-wrapper {
+	padding-top: 4em;
+}
+
+.profileEditorWrapper {
+	display: flex;
+    gap: 35px;
+}
+
+.profileEditorContentWrapper {
+	display: flex;
+    flex-direction: column;
+	gap: 25px;
+}
+
+textarea {
+	resize: none;
 }

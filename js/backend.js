@@ -17,9 +17,12 @@ let enc = new TextEncoder,
         "edit",
         "delete",
         "status",
-        "presence"
+        "presence",
+        "versionCheck"
     ],
 
+    latest_client = "0.5.5",
+    lowest_client = "0.5.0",
 
     cache = {
         profiles: {},
@@ -32,7 +35,9 @@ let enc = new TextEncoder,
 
         presence: {},
         numConnections: {},
-        channels: {}
+        channels: {},
+        read: {},
+        lastMessage: {}
     }
 ;
 
@@ -214,11 +219,9 @@ api = {
             
             for(let user of users){
                 if(cache.profiles[user]) {
-                    cache.profiles[user].presence = cache.presence[user] || 0;
-
-                    result.push(cache.profiles[user])
+                    result.push({...cache.profiles[user], presence: cache.presence[user] || 0})
                 } else result.push({
-                    user,
+                    id: user,
                     created: false
                 })
             }
@@ -242,7 +245,7 @@ api = {
             }
 
             for(let channel of channels){
-                if(cache.channels[channel]) result.push(cache.channels[channel]);
+                if(cache.channels[channel]) result.push(cache.channels[channel])
                 
                 else result.push({
                     channel,
@@ -262,7 +265,7 @@ api = {
 
             return new Promise(resolve => {
                 mazeDatabase.query(
-                    `SELECT room, isOwner, isBanned, bannedUntil, member, memberSince, isMember, location, type, \`chat.rooms\`.server, \`chat.rooms\`.name FROM \`chat.rooms.members\` INNER JOIN \`chat.rooms\` ON \`chat.rooms.members\`.room = \`chat.rooms\`.id WHERE ${isUser? "member": isServer? "server": "room"} = ?`,
+                    `SELECT room, isOwner, isBanned, bannedUntil, member, memberSince, isMember FROM \`chat.rooms.members\` WHERE ${isUser? "member": isServer? "server": "room"} = ?`,
                     [isUser? user: isServer? server: channel],
     
                     function(err, results) {
@@ -286,21 +289,28 @@ api = {
         },
 
         async updatePresence(user, presence){
-            cache.presence[user] = presence;
+            if(cache.presence[user] === presence) return;
 
-            let channels = await api.util.getMemberships(user);
+            cache.presence[user] = presence, membersNotified = [];
 
-            backend.broadcast(`maze.presence.${id}`, A2U8([
-                eventList.get("presence"),
-                msg.author,
-                msg.room,
-                msg.id,
-                msg.timestamp - globalTimeStart,
-                msg.attachments.replace(/[\[\]]/g, ""),
-                msg.mentions.replace(/[\[\]]/g, ""),
-                msg.text,
-                0
-            ]), true, true)
+            let userMemberships = await api.util.getMemberships(user);
+
+            for(let membership of userMemberships){
+                let channelMembers = await api.util.getMemberships(null, membership.server || null, membership.room || null)
+                
+                for(let membership of channelMembers){
+                    if(membersNotified.includes(membership.member)) continue;
+
+                    membersNotified.push(membership.member)
+
+                    backend.broadcast(`maze.user.${membership.member}`, A2U8([
+                        eventList.get("presence"),
+                        user,
+                        presence
+                    ]), true, true)
+                }
+
+            }
         },
 
         join(user, channel){
@@ -330,8 +340,9 @@ api = {
                         user_channels: await api.util.getMemberships(User.id)
                     } : {},
 
-                    latest_client: "0.3.0",
-                    lowest_client: "0.3.0",
+                    latest_client,
+                    lowest_client,
+
                     sockets: [
                         `ws${req.domain.endsWith("test")? "": "s"}://${req.domain}/v2/mazec/`
                     ]
@@ -442,21 +453,9 @@ api = {
                             if(!response.err){
                                 msg.id = response.result.insertId;
 
-                                // for(let v of Object.values(clients)){
-                                //     if(v.listeners.message.includes(id)){
-                                //         v.write([
-                                //             eventList.get("message"),
-                                //             msg.author,
-                                //             msg.room,
-                                //             msg.id,
-                                //             msg.timestamp - globalTimeStart,
-                                //             msg.attachments.replace(/[\[\]]/g, ""),
-                                //             msg.mentions.replace(/[\[\]]/g, ""),
-                                //             msg.text,
-                                //             0
-                                //         ])
-                                //     }
-                                // }
+                                cache.lastMessage[id] = Date.now();
+                                if(!cache.read[User.id]) cache.read[User.id] = {};
+                                cache.read[User.id][id] = Date.now();
 
                                 backend.broadcast(`maze.messages.${id}`, A2U8([
                                     eventList.get("message"),
@@ -587,6 +586,9 @@ api = {
                             return error(2)
                         }
 
+                        if(!cache.read[User.id]) cache.read[User.id] = {};
+                        cache.read[User.id][id] = Date.now();
+
                         // Todo: Implement memory caching
 
                         let query = (req.getQuery("id") && typeof +req.getQuery("id") == "number")? [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false and id =?`, [id, (+req.getQuery("id")) || 0]] : [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false order by id desc limit ${(+req.getQuery("limit")) || 10} offset ${(+req.getQuery("offset")) || 0}`, [id]];
@@ -594,10 +596,12 @@ api = {
                         response = await mazeDatabase.query(...query)
                         
                         if(!response.err){
+
                             res.send(JSON.stringify(response.result.map(message => {
                                 message.edited = !!message.edited[0]
                                 return message
                             })))
+
                         } else {
                             return error(response.err)
                         }
@@ -608,7 +612,7 @@ api = {
                             return error(2)
                         }
 
-                        let channels = await api.util.getChannels(id.split(","))
+                        let channels = await api.util.getChannels(id.split(",")), result = [];
 
                         if(!channels || channels.err){
                             console.log(channels.err);
@@ -618,15 +622,23 @@ api = {
                         for(let channel of channels){
                             if(!channel) continue;
 
+                            channel = {
+                                ...channel,
+                                unread: ((cache.read[User.id] && cache.read[User.id][channel.id]? cache.read[User.id][channel.id]: 0) < (cache.lastMessage[channel.id] || 1)) || false
+                            }
+
                             if(channel.location == 0){
                                 let members = await api.util.getMemberships(null, null, channel.id)
+
                                 if(members && !members.err){
                                     channel.members = members;
-                                }
+                                } else console.error(members.err);
                             }
+
+                            result.push(channel);
                         }
                         
-                        return res.send(JSON.stringify(channels))
+                        return res.send(JSON.stringify(result))
                 }
             break;
 
@@ -820,6 +832,14 @@ api = {
                             cache.numConnections[user.id]++;
 
                             api.util.updatePresence(user.id, 1)
+
+                            ws.subscribe("maze.user." + user.id)
+
+                            ws.send(A2U8([
+                                eventList.get("versionCheck"),
+                                lowest_client,
+                                latest_client
+                            ]), true, true)
                         }
                     break;
 
@@ -830,32 +850,20 @@ api = {
                     break;
 
                     case "subscribe":
-
                         if(data[1]) ws.subscribe("maze." + data[2]); else ws.unsubscribe("maze." + data[2])
-                        
-                        // switch(data[2]){ //Event type
-                        //     case 0:
-                                // Message
-                                // if(data[1]){
-                                //     if(!ws.listeners.message.includes(data[3])) {
-                                //         ws.listeners.message.push(data[3])
-                                //     }
-                                // }else{
-                                //     ws.listeners.message[ws.listeners.message.indexOf(data[3])] = null
-                                // }
-                        //     break;
-                        // }
                     break;
                 }
             }
         },
 
         close(ws, code, message){
+            ws.forget(false)
+
+            if(!ws.authorized || !ws.user) return;
+
             cache.numConnections[ws.user.id]--;
 
             if(cache.numConnections[ws.user.id] == 0) api.util.updatePresence(ws.user.id, 0)
-
-            ws.forget(false)
         }
     }
 }

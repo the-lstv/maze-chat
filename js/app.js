@@ -13,7 +13,10 @@ M.on("load", async ()=>{
         }),
 
         channelContent: LS.Tabs("homeContents", "#homeContents", {
-            // mode: "presentation",
+            list: false
+        }),
+
+        channelTabSwitcher: LS.Tabs("channelList", "#channelList", {
             list: false
         }),
 
@@ -31,7 +34,9 @@ M.on("load", async ()=>{
         awaitingMessage: null,
 
         ui: {
-            messageScroller: O("#messageArea"),
+            messageArea: O("#messageArea"),
+            messageContainer: O("#messageContainer"),
+            mesageDisplayContainer: O("#mesageDisplayContainer"),
             messageLoaderOverlay: O("#messageLoader"),
 
             memberList: O("#memberList"),
@@ -40,7 +45,7 @@ M.on("load", async ()=>{
             activeMessage: null,
 
             messagesScrollBottom(){
-                O("#messageArea").scroll(0, O("#messageArea").scrollHeight)
+                app.ui.messageArea.scroll(0, app.ui.messageArea.scrollHeight)
             },
 
             async send(){
@@ -69,7 +74,7 @@ M.on("load", async ()=>{
                 setTimeout(async () => {
                     if(!app.awaitingMessage) return;
 
-                    O("#messageArea").add(app.awaitingMessage)
+                    app.ui.messageContainer.add(app.awaitingMessage)
                     app.ui.messagesScrollBottom()
 
                     let result = await promise;
@@ -90,12 +95,17 @@ M.on("load", async ()=>{
 
                 if(app.activeChatID == id) return;
 
+                Q(".channel.selected").all().class("selected", false)
+                
                 app.activeChatID = null;
+
                 if(localStorage.hasOwnProperty("maze.previousContent." + id)){
                     app.ui.messageContent.doc.setValue(localStorage["maze.previousContent." + id])
                 }
 
                 app.ui.fetchMessages(true, true) // Only prepares the view
+
+                app.ui.mesageDisplayContainer.style.display = "none";
 
                 let chat = await app.client.chat(id)
 
@@ -120,11 +130,16 @@ M.on("load", async ()=>{
                     return
                 }
 
-                app.chats[id] = chat;
+                Q(".channelName").all().set(chat.info.name.replaceAll(" ", "-"))
+
+                if(chat.listItemRenderer) {
+                    chat.listItemRenderer.class("selected")
+                    chat.listItemRenderer.class("unread", false)
+                }
 
                 app.activeChatID = id;
 
-                app.ui.fetchMessages(true)
+                app.ui.fetchMessages(true, false, true)
 
                 app.handleChannelEvents(chat)
 
@@ -161,11 +176,11 @@ M.on("load", async ()=>{
                 }
             },
 
-            async fetchMessages(clear, prepareOnly){
+            async fetchMessages(clear, prepareOnly, display){
                 if(app.messageOffset >= app.messageOffsetMax) return;
 
                 if (clear) {
-                    for(let element of O("#messageArea").getAll(".maze-message")) element.remove();
+                    for(let element of app.ui.messageContainer.getAll(".maze-message")) element.remove();
                     app.ui.messageLoaderOverlay.style.display = "flex"
                 }
 
@@ -181,10 +196,10 @@ M.on("load", async ()=>{
                 for(let message of data){
                     let element = app.activeChat.messageBuffer[message.id].renderBuffer || await app.messageElement(message);
 
-                    if(app.ui.messageArea.children.length > 0){
-                        app.ui.messageArea.children[0].addBefore(element)
+                    if(app.ui.messageContainer.children.length > 0){
+                        app.ui.messageContainer.children[0].addBefore(element)
                     } else {
-                        app.ui.messageArea.add(element)
+                        app.ui.messageContainer.add(element)
                     }
                 }
 
@@ -193,6 +208,11 @@ M.on("load", async ()=>{
                 app.ui.messageLoaderOverlay.style.display = "none"
 
                 app.ui.messageArea.scrollTop = originalScrollOffset + (app.ui.messageArea.scrollHeight - originalScrollHeight)
+
+                if(display) {
+                    app.ui.mesageDisplayContainer.style.display = "block";
+                    app.ui.messagesScrollBottom()
+                }
             },
 
             async drawTyping(){
@@ -254,8 +274,6 @@ M.on("load", async ()=>{
                 app.activeChat.message(app.ui.activeMessage.id).delete()
             },
 
-            messageArea: O("#messageArea"),
-
             profileShown: false,
 
             get displayNsfw(){
@@ -293,12 +311,10 @@ M.on("load", async ()=>{
             editedMessageBadge: "<span style='font-size:small;color:gray;margin-left:8px'>(Edited)</span>"
         },
 
-        chats: {},
-
         activeChatID: null,
 
         get activeChat(){
-            return app.chats[app.activeChatID]
+            return app.client.chats[app.activeChatID]
         },
 
         htmlUnEscape(text){
@@ -450,9 +466,8 @@ M.on("load", async ()=>{
         },
 
         handleChannelEvents(chat){
-            chat.open() // Subscribe for socket updates (like new messages, edits, etc.)
-
             if(!chat.maze_handling){
+                chat.open() // Subscribe for socket updates (like new messages, edits, etc.)
 
                 chat.maze_handling = true;
 
@@ -463,7 +478,7 @@ M.on("load", async ()=>{
                     }
                     
                     if(app.activeChat && app.activeChat.id === chat.id) {
-                        O("#messageArea").add(await app.messageElement(msg))
+                        app.ui.messageContainer.add(await app.messageElement(msg))
                         app.ui.messagesScrollBottom()
                         app.ui.condenseMessages(0, 5)
                     } else {
@@ -471,12 +486,13 @@ M.on("load", async ()=>{
 
                         // Got notification
 
-
-                        // ,..
+                        if(chat.listItemRenderer) {
+                            chat.listItemRenderer.class("unread")
+                        }
 
                         app.pushNotification("Message in #" + msg.room, {
                             body: msg.text,
-                            icon: "https://cdn.extragon.cloud/file/" + (profile.avatar || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!profile.avatar || profile.avatar.endsWith("svg")? "" : "?size=" + size)
+                            icon: "https://cdn.extragon.cloud/file/" + (profile.avatar || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!profile.avatar || profile.avatar.endsWith("svg")? "" : "?size=32")
                         })
                     }
                 })
@@ -612,7 +628,7 @@ M.on("load", async ()=>{
 
             let element = N({
                 class: "profile-avatar-source-container",
-                attr: {"user-id": profile.id || ""},
+                attr: {"user-id": typeof profile.id !== "undefined"? String(profile.id) : ""},
                 inner: [
                     N(profile.avatar && (profile.avatar.endsWith("webm") || profile.avatar.endsWith("mp4"))? "video": "img", {
                         src: "https://cdn.extragon.cloud/file/" + (profile.avatar || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!profile.avatar || profile.avatar.endsWith("svg")? "" : "?size=" + size),
@@ -631,9 +647,9 @@ M.on("load", async ()=>{
 
         async showProfile(id, x = M.x, y = M.y){
             let container = O("#profilePopup");
+
             LS._topLayerInherit()
 
-            container.loading = true;
             container.show("flex");
             app.ui.profileShown = true
 
@@ -686,20 +702,24 @@ M.on("load", async ()=>{
                 if(!membership.isMember) continue;
 
                 let channel = await app.client.chat(membership.room);
+                
+                console.log(channel.info.unread);
 
-                O("#list .list-items").add(N({
-                    class: "list-item channel",
+                channel.listItemRenderer = N({
+                    class: "list-item channel" + (channel.info.unread? " unread": ""),
                     inner: [
                         N("i", {class: "bi-hash"}),
                         N("span", {
-                            innerText: membership.name
+                            innerText: channel.info.name
                         })
                     ],
 
                     onclick(){
                         app.ui.openChat(membership.room)
                     }
-                }))
+                })
+
+                O("#list .list-items").add(channel.listItemRenderer)
             }
         }
     }
@@ -715,11 +735,14 @@ M.on("load", async ()=>{
     if(token) {
         let login = await app.client.login(token)
 
-        if(typeof login !== "object"){
-            alert(login)
-            tabs.setActive('login');
+        if(!login || login.error){
+            tabs.setActive(login.error == "outdated" ? 'outdated': 'login');
             return
         }
+
+        let channels = await app.client.getAllChats()
+
+        for(let channel of channels) app.handleChannelEvents(channel);
 
         // let error = await Mazec.initialize()
 
@@ -740,10 +763,10 @@ M.on("load", async ()=>{
         // Load more messages when scrolling
 
         let loadingMessages = false;
-        app.ui.messageScroller.on("scroll", async event => {
+        app.ui.messageArea.on("scroll", async event => {
             O("#messageButtons").applyStyle({display: "none"});
 
-            if(app.activeChatID && !loadingMessages && app.ui.messageScroller.scrollTop < 50 && (app.options.messageSampleSize <= Object.keys(app.activeChat.messageBuffer).length)){
+            if(app.activeChatID && !loadingMessages && app.ui.messageArea.scrollTop < 50 && (app.options.messageSampleSize <= Object.keys(app.activeChat.messageBuffer).length)){
                 loadingMessages = true;
 
                 app.messageOffset += app.options.messageSampleSize;
@@ -755,27 +778,37 @@ M.on("load", async ()=>{
             }
         })
 
-        app.screen.setActive("home")
+        // Client events
 
         app.client.on("heartbeat.miss", () => {
             O("#reconnection").style.display = "flex"
         })
-
-        app.client.on("disconnect", () => {
+        
+        .on("disconnect", () => {
             O("#reconnection").style.display = "flex"
         })
-
-        app.client.on("heartbeat", () => {
+        
+        .on("connect", () => {
             O("#reconnection").style.display = "none"
         })
+        
+        .on("heartbeat", () => {
+            O("#reconnection").style.display = "none"
+        })
+        
+        .on("error.outdatedClient", () => {
+            app.screen.setActive("outdated")
+        })
+
+        .on("presence", (user, status) => {
+            console.log(user, status);
+        })
+
+        app.screen.setActive("home")
 
         O("#messageButtons").on("click", () => O("#messageButtons").applyStyle({display: "none"}))
-        
+
         LS.invoke("app.ready", app);
-
-        let channels = await app.client.getAllChats()
-
-        for(let channel of channels) app.handleChannelEvents(channel);
     }
 
     LS.GlobalEvents.prepare({
