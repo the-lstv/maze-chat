@@ -827,6 +827,7 @@
 
                 if(result && result.success){
                     Object.assign(_this.profileCache[_this.user.id], patch)
+                    _this._cleanProfile(_this.profileCache[_this.user.id])
                 }
 
                 return result

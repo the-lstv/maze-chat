@@ -279,7 +279,7 @@ api = {
 
             return new Promise(resolve => {
                 mazeDatabase.query(
-                    `SELECT room, isOwner, isBanned, bannedUntil, member, memberSince, isMember FROM \`chat.rooms.members\` WHERE ${isUser? "member": isServer? "server": "room"} = ?`,
+                    `SELECT * FROM \`chat.rooms.members\` WHERE ${isUser? "member": isServer? "server": "room"} = ?`,
                     [isUser? user: isServer? server: channel],
     
                     function(err, results) {
@@ -341,13 +341,101 @@ api = {
             cache.read[user][id] = date;
         },
 
-        join(user, channel){
-            cache.memberships.channel[channel].push(membership)
+        async join(user, options){
+
+            // Join a server, channel, or DM
+
+            let membership = {};
+
+            return new Promise((resolve, reject) => {
+                if(typeof options !== "object" || !options.id || !options.type) return resolve({error: "Invalid options"});
+    
+                mazeDatabase.query(
+                    `SELECT * FROM \`chat.rooms.members\` WHERE member = ? AND ${options.type == "server"? "server": "room"} = ? LIMIT 1`,
+                    [user, options.id],
+    
+                    async function(err, results) {
+                        if(!err){
+                            if(results.length > 0 && results[0].isBanned && options.isBanned !== false) return resolve({error: "User is banned"});
+
+                            if(options.type == "channel") membership.room = options.id;
+                            if(options.type == "server") membership.server = options.id;
+
+                            if(options.owner) membership.isOwner = true;
+                            membership.isBanned = !!options.isBanned;
+                            membership.isMember = typeof options.isMember === "boolean"? options.isMember: true;
+
+                            if(results.length){
+                                membership.memberSince = results[0].memberSince
+                                response = await mazeDatabase.table("chat.rooms.members").update(`where ${options.type == "server"? "server": "room"}=${+options.id} and user=${+user}`, membership)
+                            } else {
+                                membership.memberSince = Date.now()
+                                response = await mazeDatabase.table("chat.rooms.members").insert(membership);
+                            }
+                            
+                            if(!response.err){
+                                if(membership.isBanned) return resolve({error: "User is banned"});
+
+                                if(!membership.bannedUntil) membership.bannedUntil = null;
+
+                                
+                                cache.memberships.user[user] = membership
+                                cache.memberships[options.type == "server"? "server": "channel"][options.id] = membership
+                                
+                                if(results.length && membership.isMember) {
+                                    resolve(true)
+                                }
+
+                                resolve(true)
+
+                                // response = await mazeDatabase.table("chat.messages").insert({
+                                //     text: "",
+                                //     mentions: "[]",
+                                //     attachments: "[]",
+                                //     author: user,
+                                //     room: data.channel,
+                                //     timestamp: Date.now(),
+                                //     type: 2
+                                // })
+
+                                // if(!response.err){
+                                //     let msg_id = response.result.insertId;
+
+                                //     backend.broadcast(`maze.messages.${data.channel}`, A2U8([
+                                //         eventList.get("message"),
+                                //         user,
+                                //         data.channel,
+                                //         msg_id,
+                                //         0,
+                                //         "",
+                                //         "",
+                                //         "",
+                                //         2
+                                //     ]), true, true)
+
+                                // } else {
+                                //     console.error(response.err);
+                                //     return error(24)
+                                // }
+                            } else {
+                                console.log(response.err);
+                                return error(24)
+                            }
+    
+                            let membership = {
+                                member: user,
+                                memberSince: Date.now()
+                            }
+                        } else return resolve(false), console.error(err);
+                    }
+                )
+            })
+
         }
     },
 
     async HandleRequest({req, res, segments, error, shift}){
-        let response;
+        let response, id; // These are only here because you cannot redeclare across a switch
 
         let User = backend.user.getAuth(req);
 
@@ -485,12 +573,80 @@ api = {
                 }
             break;
 
+            case servers:
+                if(User.error) return error(13);
+                id = shift();
+
+
+            break;
+
             case "channels":
                 if(User.error) return error(13);
-                let id = shift();
-
+                id = shift();
 
                 switch(shift()){
+                    case "create":
+                        if(User.error) return error(13);
+
+                        req.parseBody(async (data, fail) => {
+                            if(fail){
+                                return error(fail)
+                            }
+        
+                            data = data.json;
+        
+                            if(typeof data !== "object" || !data.name){
+                                return error(2)
+                            }
+        
+                            if(typeof data.location == "string") data.location = ["channel", "dm", "server", "group"].indexOf(data.location);
+                            if(typeof data.type == "string") data.type = ["text", "announcement", "voice"].indexOf(data.type);
+        
+                            response = await mazeDatabase.table("chat.rooms").insert({
+                                author: User.id,
+                                name: data.name,
+                                icon: data.icon || "",
+                                location: data.location || 0,
+                                type: data.type || 0,
+                                isPublic: data.isPublic ? 1 : 0,
+                                data: data.data ? JSON.stringify(data.data) : "{}",
+                                e2e: data.encryption ? 1 : 0,
+                                burn: data.burn ? 1 : 0,
+                            })
+            
+                            if(!response.err){
+                                mazeDatabase.table("chat.rooms.members").insert({
+                                    member: User.id,
+                                    room: response.result.insertId,
+                                    isOwner: true,
+                                    memberSince: Date.now()
+                                })
+        
+                                res.send("" + response.result.insertId)
+                            } else {
+                                return error(24)
+                            }
+                        }).data()
+                    break;
+
+                    case "join":
+                        if(User.error) return error(13);
+
+                        req.parseBody(async (data, fail) => {
+                            if(fail){
+                                return error(fail)
+                            }
+
+                            data = data.json;
+
+                            if(typeof data !== "object" || !(data.channel || data.server)){
+                                return error(2)
+                            }
+
+                            // ..
+                        }).data()
+                    break;
+
                     case "send": case "post":
                         id = +id;
                         res.wait = true;
@@ -713,112 +869,6 @@ api = {
                         
                         return res.send(JSON.stringify(result))
                 }
-            break;
-
-            case "join":
-                if(User.error) return error(13);
-
-
-                // TEMPORARY
-
-                req.parseBody(async (data, fail) => {
-                    if(fail){
-                        return error(fail)
-                    }
-
-                    data = data.json;
-
-                    if(typeof data !== "object" || !(data.channel || data.server)){
-                        return error(2)
-                    }
-
-                    response = await mazeDatabase.table("chat.rooms.members").insert({
-                        member: User.id,
-                        room: data.channel,
-                        memberSince: Date.now()
-                    })
-
-                    if(!response.err){ 
-                        res.send(`{"success":true}`)
-
-                        response = await mazeDatabase.table("chat.messages").insert({
-                            text: "",
-                            mentions: "[]",
-                            attachments: "[]",
-                            author: User.id,
-                            room: data.channel,
-                            timestamp: Date.now(),
-                            type: 2
-                        })
-
-                        if(!response.err){
-                            let msg_id = response.result.insertId;
-
-                            backend.broadcast(`maze.messages.${data.channel}`, A2U8([
-                                eventList.get("message"),
-                                User.id,
-                                data.channel,
-                                msg_id,
-                                0,
-                                "",
-                                "",
-                                "",
-                                2
-                            ]), true, true)
-
-                        } else {
-                            console.error(response.err);
-                            return error(24)
-                        }
-                    } else {
-                        console.log(response.err);
-                        return error(24)
-                    }
-                }).data()
-            break;
-
-            case "create":
-                if(User.error) return error(13);
-
-                req.parseBody(async (data, fail) => {
-                    if(fail){
-                        return error(fail)
-                    }
-
-                    data = data.json;
-
-                    if(typeof data !== "object" || !data.name){
-                        return error(2)
-                    }
-
-                    if(typeof data.location == "string") data.location = ["channel", "dm", "server", "group"].indexOf(data.location);
-                    if(typeof data.type == "string") data.type = ["text", "announcement", "voice"].indexOf(data.type);
-
-                    response = await mazeDatabase.table("chat.rooms").insert({
-                        author: User.id,
-                        name: data.name,
-                        icon: data.icon || "",
-                        location: data.location || 0,
-                        type: data.type || 0,
-                        isPublic: data.isPublic ? 1 : 0,
-                        data: data.data ? JSON.stringify(data.data) : "{}",
-                        e2e: data.encryption ? 1 : 0,
-                        burn: data.burn ? 1 : 0,
-                    })
-    
-                    if(!response.err){
-                        mazeDatabase.table("chat.rooms.members").insert({
-                            member: User.id,
-                            room: response.result.insertId,
-                            isOwner: true,
-                            memberSince: Date.now()
-                        })
-
-                        res.send("" + response.result.insertId)
-                    } else {
-                        return error(24)
-                    }
-                }).data()
             break;
 
             default:
