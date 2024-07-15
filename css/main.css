@@ -154,14 +154,14 @@ main {
 }
 
 .maze-message.nsfw .maze-message-avatar img,
-.profile-view.nsfw .profile-avatar img,
-.profile-view.nsfw .profile-banner :is(video, img),
+.profileWrapper.nsfw .profile-avatar img,
+.profileWrapper.nsfw .profile-banner :is(video, img),
 .list-item.nsfw .list-avatar :is(video, img) {
     filter: blur(10px);
     transform: scale(1.5);
 }
 
-.maze-message.nsfw .maze-message-avatar::after, .profile-view.nsfw .profile-avatar::after, .list-item.nsfw .list-avatar::after {
+.maze-message.nsfw .maze-message-avatar::after, .profileWrapper.nsfw .profile-avatar::after, .list-item.nsfw .list-avatar::after {
     content: "\F334";
     position: absolute;
     border-radius: 50%;
@@ -181,7 +181,7 @@ main {
     color: #fe5555;
 }
 
-.profile-view.nsfw .profile-avatar::after {
+.profileWrapper.nsfw .profile-avatar::after {
     font-size: 2em;
     width: 60%;
     height: 60%;
@@ -462,11 +462,11 @@ main {
     overflow: hidden;
 }
 
-.profile-view :is(h1, h2, h3, h4, h5) {
+.profileWrapper :is(h1, h2, h3, h4, h5) {
     margin: 0;
 }
 
-.profile-bot-badge {
+#profile-bot-badge {
     position: absolute;
     backdrop-filter: blur(15px) brightness(0.5);
     top: 10px;
@@ -488,19 +488,14 @@ main {
     font-size: 14px;
 }
 
-.profile-name {
-    margin: 8px 0 !important;
-    margin-top: 18px !important;
-}
 
-.profile-view {
+.profileWrapper {
     position: fixed;
-    top: 198px;
-    left: 360px;
-    width: 20em;
-    height: 30em;
+    width: 320px;
+	min-height: 340px;
+    max-height: 480px;
     background: var(--ui);
-    border-radius: 1em;
+    border-radius: 18px;
     outline: .1em solid var(--elevate-1);
     box-shadow: 0 .25em 2em 0 #0004;
     overflow: hidden;
@@ -508,26 +503,42 @@ main {
 }
 
 .profile-banner {
-    min-height: 8em;
-    overflow: hidden;
+    height: 160px;
+	max-height: 160px;
+    min-height: 160px;
+    overflow: visible;
+    z-index: 0;
+    position: relative;
+	background: var(--custom-color-0, --elevate-0);
+	-webkit-mask: radial-gradient(circle at calc(100% - 17%) calc(100% - 16%), transparent 22%, #fff 22%);
+    mask: radial-gradient(circle at calc(50%) calc(100% - 34%), transparent 38%, #fff 22%);
+}
+
+.profile-banner::after {
+    content: "";
+    position: absolute;
+    bottom: -10px;
+    left: 0;
+    right: 0;
+    height: 90px;
+    background: linear-gradient(0, var(--ui) 10px, transparent);
 }
 
 .profile-banner :is(video, img) {
-    width: 100%;
-    aspect-ratio: 4/2;
+	width: 100%;
+    height: 160px;
+    min-height: 160px;
     object-fit: cover;
 }
 
 .profile-avatar {
     position: absolute;
     left: 50%;
-    top: 25%;
-    width: 8em;
-    height: 8em;
+    top: 45px;
+    width: 120px;
+    height: 120px;
     border-radius: 50%;
-    overflow: hidden;
-    transform: translate(-50%,-70%);
-    outline: .7em solid var(--ui);
+    transform: translateX(-50%);
 }
 
 .profile-avatar img {
@@ -535,15 +546,60 @@ main {
     height: 100%;
 }
 
-.profile-box {
-    margin: 1em;
-    margin-top: 3em;
+.profileContent {
     flex: 1;
     background: var(--ui-bg-1);
-    border-radius: 1em;
+    border-radius: 14px;
     padding: 1px 15px;
     display: flex;
     flex-direction: column;
+	word-break: break-word;
+    overflow-y: auto;
+	margin: 1em;
+    margin-top: 1.8em;
+    z-index: 5;
+    padding-bottom: 10px;
+}
+
+.profileInner {
+	display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 100%;
+    position: relative;
+    flex: 1;
+    overflow: hidden;
+
+    /* border-radius: 0.8em;
+    overflow: hidden;
+    background: var(--transparent-overlay-strong);
+    padding-bottom: 10px; */
+}
+
+.profile-name {
+	font-weight: 800 !important;
+    margin: 8px 0 !important;
+    margin-top: 18px !important;
+}
+
+.profileWrapper.color {
+    padding: 5px;
+    background: linear-gradient(var(--custom-color-1), var(--custom-color-2));
+}
+
+.profileWrapper.color .profile-banner::after {
+    background: none;
+}
+
+.profileWrapper.color .profileInner {
+	border-radius: 15px;
+	background: #000a;
+}
+
+.profileWrapper.color .profileContent {
+    margin: 0px;
+    background: none;
+    border-radius: 0;
 }
 
 .maze-message-more-container {
@@ -644,7 +700,7 @@ pre {
     background: var(--elevate-0);
 }
 
-[ls-theme="light"] .profile-box {
+[ls-theme="light"] .profileContent {
 	background: var(--color-bg);
 }
 
@@ -911,6 +967,7 @@ pre {
     background: var(--color);
     animation: l49 1s infinite linear;
 }
+
 .networkLoader:after {
     transform-origin: 200% 50%;
     --s:-1;
@@ -920,6 +977,39 @@ pre {
 @keyframes l49 {
     58%,
     100% {transform: rotate(calc(var(--s,1)*1turn))}
+}
+
+.loader {
+    width: 50px;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 8px solid var(--color);
+    animation:
+        l20-1 0.8s infinite linear alternate,
+        l20-2 1.6s infinite linear;
+}
+
+button .loader {
+    width: 1em;
+    border: 2px solid var(--color);
+    margin-bottom: -2px;
+}
+
+@keyframes l20-1{
+    0%    {clip-path: polygon(50% 50%,0       0,  50%   0%,  50%    0%, 50%    0%, 50%    0%, 50%    0% )}
+    12.5% {clip-path: polygon(50% 50%,0       0,  50%   0%,  100%   0%, 100%   0%, 100%   0%, 100%   0% )}
+    25%   {clip-path: polygon(50% 50%,0       0,  50%   0%,  100%   0%, 100% 100%, 100% 100%, 100% 100% )}
+    50%   {clip-path: polygon(50% 50%,0       0,  50%   0%,  100%   0%, 100% 100%, 50%  100%, 0%   100% )}
+    62.5% {clip-path: polygon(50% 50%,100%    0, 100%   0%,  100%   0%, 100% 100%, 50%  100%, 0%   100% )}
+    75%   {clip-path: polygon(50% 50%,100% 100%, 100% 100%,  100% 100%, 100% 100%, 50%  100%, 0%   100% )}
+    100%  {clip-path: polygon(50% 50%,50%  100%,  50% 100%,   50% 100%,  50% 100%, 50%  100%, 0%   100% )}
+}
+
+@keyframes l20-2{ 
+    0%    {transform:scaleY(1)  rotate(0deg)}
+    49.99%{transform:scaleY(1)  rotate(135deg)}
+    50%   {transform:scaleY(-1) rotate(0deg)}
+    100%  {transform:scaleY(-1) rotate(-135deg)}
 }
 
 #reconnection {
@@ -1094,12 +1184,12 @@ pre {
     height: 100%;
     flex: 1;
     background: var(--elevate);
-	padding: 0 3em;
+	padding: 10em 3em;
 	overflow-y: auto;
 }
 
 .sidebar-content {
-    max-width: 620px;
+    max-width: 720px;
 }
 
 .sidebar-item {
@@ -1138,4 +1228,101 @@ pre {
 
 textarea {
 	resize: none;
+}
+
+.profileEditorPreviewWrapper #profilePopup {
+    display: flex !important;
+    left: unset !important;
+    top: unset !important;
+    position: relative;
+    box-shadow: none;
+    margin-top: 20px;
+}
+
+input[type=color] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 80px;
+    height: 54px;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+}
+
+input[type=color]::after {
+    content: "\F4C9";
+    font-family: bootstrap-icons;
+    font-weight: 400 !important;
+    font-size: .8em;
+    position: absolute;
+    right: 12px;
+    top: 12px;
+}
+
+input[type=color]::-webkit-color-swatch {
+    border-radius: 10px;
+    border: none;
+}
+
+input[type=color]::-moz-color-swatch {
+    border-radius: 10px;
+    border: none;
+}
+
+.color-picker {
+    position: relative;
+}
+
+.color-picker span {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+}
+
+#unsavedContent, #cropModal .buttons {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+#unsavedContent {
+    position: absolute;
+    bottom: 30px;
+    left: 20%;
+    right: 20%;
+    z-index: 5;
+    background: var(--elevate-0);
+    border-radius: 10px;
+    outline: 1px solid var(--elevate-1);
+    box-shadow: 0 4px 12px 0 #0003;
+    padding: 10px 20px;
+    transition: .2s;
+    transform: translateY(150%);
+    opacity: .2;
+}
+
+#unsavedContent.visible {
+    transform: none;
+    opacity: 1;
+}
+
+.modalLoading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 300px;
+}
+
+#cropModal ls-modal-body {
+    padding-bottom: 0;
+}
+
+.circle .cr-viewport.cr-vp-square {
+    border-radius: 50%;
 }

@@ -7,6 +7,8 @@ M.on("load", async ()=>{
     app = {
         client: new MazecClient(location.origin.endsWith("test")? "http://api.extragon.test/v2/mazec": "https://api.extragon.cloud/v2/mazec"),
 
+        cdn: LSCDN(location.origin.endsWith("tefst")? "http://cdn.extragon.test": "https://cdn-origin.extragon.cloud"),
+
         screen: LS.Tabs("main", "#main", {
             mode: "presentation",
             list: false
@@ -21,6 +23,12 @@ M.on("load", async ()=>{
         }),
 
         joinServerModal: LS.Modal("joinChat", O("#joinChatModal")),
+
+        cropModal: LS.Modal("cropModal", O("#cropModal"), {
+            uncancelable: true
+        }),
+
+        profileEditorPatch: {},
 
         options: {
             messageSampleSize: 50
@@ -308,7 +316,74 @@ M.on("load", async ()=>{
                 })
             },
 
-            editedMessageBadge: "<span style='font-size:small;color:gray;margin-left:8px'>(Edited)</span>"
+            editedMessageBadge: "<span style='font-size:small;color:gray;margin-left:8px'>(Edited)</span>",
+
+            resetSettings(){
+                app.ui.profileShown = false
+                O(".profileEditorPreviewWrapper").add(O("#profilePopup"))
+                app.showProfile(app.client.user.id)
+
+                O("#profileEditorDisplayname").value = app.client.user.profile.displayname;
+                O("#profileEditorBio").value = app.client.user.profile.bio;
+
+                O("#profileEditorGradientPrimary").value = app.client.user.profile.colors[1] || "#000";
+                O("#profileEditorGradientSecondary").value = app.client.user.profile.colors[2] || "#000";
+                O("#profileEditorGradientToggle").checked = !!app.client.user.profile.colors[1] || !!app.client.user.profile.colors[2]
+                O("#profileEditorNSFWToggle").checked = app.client.user.profile.nsfw
+
+                O("#unsavedContent").class("visible", false)
+
+                app.profileEditorPatch = {}
+            },
+
+            async saveSettings() {
+                if(app.ui.settingsSaveInProgress) return null;
+
+                app.ui.settingsSaveInProgress = true;
+
+                O("#settingsSaveButton").get("span").hide()
+                O("#settingsSaveButton").get(".loader").show()
+
+                let patch = {...app.profileEditorPatch};
+
+                async function uploadPicture(source, key){
+                    if((!source instanceof Blob) || (!source instanceof File)) return;
+
+                    let upload = await app.cdn.uploadBlob(source);
+    
+                    if(!upload || !Array.isArray(upload) || !upload[0].success){
+                        return false
+                    }
+                    
+                    patch[key] = (upload[0].name || upload[0].hash).replace(".svg", ".webp") // SVG is accepted but gets converted through the uploader, so it should be renamed
+                    if(!patch[key].includes(".")) patch[key] += ".webp";
+                }
+
+                if(patch.avatar) await uploadPicture(patch.avatar, "avatar");
+                if(patch.banner) await uploadPicture(patch.banner, "banner");
+
+                if(patch.colors) patch.colors = patch.colors.join(",")
+
+                let result;
+
+                try{
+                    result = await app.client.updateProfile(patch)
+                } catch {}
+
+                app.ui.settingsSaveInProgress = false;
+
+                O("#settingsSaveButton").get("span").show()
+                O("#settingsSaveButton").get(".loader").hide()
+
+                if(!result || !result.success){
+                    // Something went wrong
+                    LS.Modal.build({
+                        title: "Something went wrong",
+                        content: "We could not save your profile :(",
+                        buttons: [{text: "OK", color: "auto"}]
+                    })
+                } else O("#unsavedContent").class("visible", false);
+            }
         },
 
         activeChatID: null,
@@ -626,14 +701,17 @@ M.on("load", async ()=>{
         getAvatar(profile, size = 80, badge = false){
             if(typeof profile === "string") profile = {avatar: profile}
 
+            let isAnimated = profile.avatar && (profile.avatar.endsWith("webm") || profile.avatar.endsWith("mp4"))
+
             let element = N({
                 class: "profile-avatar-source-container",
                 attr: {"user-id": typeof profile.id !== "undefined"? String(profile.id) : ""},
                 inner: [
-                    N(profile.avatar && (profile.avatar.endsWith("webm") || profile.avatar.endsWith("mp4"))? "video": "img", {
+                    N(isAnimated? "video": "img", {
                         src: "https://cdn.extragon.cloud/file/" + (profile.avatar || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!profile.avatar || profile.avatar.endsWith("svg")? "" : "?size=" + size),
                         class: "profile-avatar-source" + (badge? " has-badge": ""),
-                        draggable: false
+                        draggable: false,
+                        ...isAnimated? {attr: ["loop", "autoplay", "muted"]}: {}
                     }),
                     badge? N({
                         class: "profile-presence-badge",
@@ -650,19 +728,9 @@ M.on("load", async ()=>{
 
             LS._topLayerInherit()
 
-            container.show("flex");
             app.ui.profileShown = true
 
             let profile = await app.client.profile(id);
-            
-            container.applyStyle({
-                left: Math.min(x, innerWidth - container.getBoundingClientRect().width - 20) +"px",
-                top: Math.min(y, innerHeight - container.getBoundingClientRect().height - 20) +"px"
-            })
-
-            container.get(".profile-avatar img").onload = ()=>{
-                container.loading = false
-            }
 
             container.class("nsfw", profile.nsfw)
 
@@ -671,9 +739,9 @@ M.on("load", async ()=>{
                 N({inner: app.renderMarkdown(profile.bio)})
             ]: "");
 
-            container.get(".profile-name").set(profile.displayname);
+            container.get(".profile-name").innerText = profile.displayname;
             
-            container.get(".profile-bot-badge").style.display = profile.bot? "inline-block": "none";
+            container.get("#profile-bot-badge").style.display = profile.bot? "inline-block": "none";
 
             container.get(".profile-avatar").set(app.getAvatar(profile, 256));
 
@@ -689,7 +757,16 @@ M.on("load", async ()=>{
                 }
             }
 
-            container.get(".profile-banner").style.background = profile.colors[1]? profile.colors[1].hex : "var(--elevate-0)"
+            for(let i = 0; i < 3; i++) container.style.setProperty("--custom-color-" + i, profile.colors[i] || "var(--ui)");
+
+            O("#profilePopup").class("color", !!profile.colors[1] || !!profile.colors[2])
+
+            container.show("flex");
+
+            container.applyStyle({
+                left: Math.min(x, innerWidth - container.getBoundingClientRect().width - 20) +"px",
+                top: Math.min(y, innerHeight - container.getBoundingClientRect().height - 20) +"px"
+            })
         },
 
         async temporary_renderPubliChannels(){
@@ -760,6 +837,149 @@ M.on("load", async ()=>{
             O("#memberList").style.display = name == "room"? "flex": "none";
         })
 
+        app.screen.on("tab_changed", (id, name) => {
+            if(name == "settings") {
+                app.ui.resetSettings();
+            } else {
+                O("#profilePopup").hide();
+                LS._topLayer.add(O("#profilePopup"))
+            }
+        })
+
+        // This code is very dirty
+
+        O("#profileEditorBio").on("input", () => {
+            O("#unsavedContent").class("visible", true)
+            O("#profilePopup .profile-bio").set(O("#profileEditorBio").value? [
+                N("h3", "About me"),
+                N({inner: app.renderMarkdown(O("#profileEditorBio").value)})
+            ]: "")
+            app.profileEditorPatch.bio = O("#profileEditorBio").value;
+        })
+
+        O("#profileEditorDisplayname").on("input", () => {
+            O("#unsavedContent").class("visible", true)
+            O("#profilePopup .profile-name").innerText = app.profileEditorPatch.displayname = O("#profileEditorDisplayname").value || app.client.user.profile.displayname;
+        })
+
+        O("#profileEditorGradientToggle").on("change", () => {
+            O("#unsavedContent").class("visible", true)
+            let checked = O("#profileEditorGradientToggle").checked;
+            O("#profilePopup").class("color", checked)
+            app.profileEditorPatch.colors = [...app.client.user.profile.colors];
+
+            app.profileEditorPatch.colors[1] = checked? O("#profileEditorGradientPrimary").value: "";
+            app.profileEditorPatch.colors[2] = checked? O("#profileEditorGradientSecondary").value: "";
+        })
+
+        O("#profileEditorNSFWToggle").on("change", () => {
+            O("#unsavedContent").class("visible", true)
+            let checked = O("#profileEditorNSFWToggle").checked;
+            O("#profilePopup").class("nsfw", checked)
+            app.profileEditorPatch.nsfw = checked;
+        })
+
+        O("#profileEditorGradientPrimary").on("input", () => {
+            O("#unsavedContent").class("visible", true)
+            O("#profilePopup").style.setProperty("--custom-color-1", O("#profileEditorGradientPrimary").value)
+            if(!app.profileEditorPatch.colors) app.profileEditorPatch.colors = [...app.client.user.profile.colors]
+            app.profileEditorPatch.colors[1] = O("#profileEditorGradientPrimary").value
+        })
+
+        O("#profileEditorGradientSecondary").on("input", () => {
+            O("#unsavedContent").class("visible", true)
+            O("#profilePopup").style.setProperty("--custom-color-2", O("#profileEditorGradientSecondary").value)
+            if(!app.profileEditorPatch.colors) app.profileEditorPatch.colors = [...app.client.user.profile.colors]
+            app.profileEditorPatch.colors[2] = O("#profileEditorGradientSecondary").value
+        });
+
+        let croppers = {};
+
+        async function imageCropModal(source, key, preview, viewport, circle){
+            if(!source) return;
+
+            O("#cropModal .cropperContainer").hide()
+            O("#cropModal .modalLoading").show("flex")
+            O("#settingsSaveImageButton > span").show()
+            O("#settingsSaveImageButton > div").hide()
+
+            O("#settingsSaveImageButton").onclick = null;
+
+            app.cropModal.show()
+
+            if(!window.Croppie) {
+                await M.Script("https://cdnjs.cloudflare.com/ajax/libs/croppie/2.6.5/croppie.min.js")
+                await M.Style("https://cdnjs.cloudflare.com/ajax/libs/croppie/2.6.5/croppie.min.css")
+            }
+
+            if(!croppers[key]) {
+                let element = N({class: "cropper" + (circle? " circle": "")})
+
+                croppers[key] = new Croppie(element, {
+                    viewport,
+                    boundary: { width: 400, height: 300 },
+                });
+
+                O(".cropperContainer").add(element)
+            }
+
+            Q(".cropper").forEach(element => element.style.display = "none")
+            croppers[key].element.show()
+
+            let sourceURL = URL.createObjectURL(source);
+
+            setTimeout(() => {
+                O("#cropModal .cropperContainer").show()
+                O("#cropModal .modalLoading").hide()
+
+                croppers[key].bind({
+                    url: sourceURL
+                });
+
+                let processing;
+
+                O("#settingsSaveImageButton").onclick = () => {
+                    if(processing) return;
+                    processing = true;
+
+                    O("#settingsSaveImageButton > span").hide()
+                    O("#settingsSaveImageButton > div").show()
+
+                    URL.revokeObjectURL(sourceURL);
+
+                    croppers[key].result('blob', 'viewport', 'webp', .6, false).then(function(blob) {
+                        const image = new Image();
+                        image.onload = () => {
+
+                            const canvas = document.createElement('canvas');
+                            canvas.width = image.naturalWidth;
+                            canvas.height = image.naturalHeight;
+
+                            canvas.getContext('2d').drawImage(image, 0, 0);
+
+                            canvas.toBlob(async (blob) => {
+                                app.profileEditorPatch[key] = new File([blob], source.name, {type: blob.type});
+                                O("#unsavedContent").class("visible", true)
+
+                                app.cropModal.hide()
+                            }, 'image/webp');
+
+                        };
+
+                        image.src = O(preview).src = URL.createObjectURL(blob);
+                    });
+                }
+            }, 350)
+        }
+
+        O("#profileEditorAvatar").on("input", event => {
+            imageCropModal(event.target.files[0], "avatar", ".profile-avatar :is(img,video)", { width: 256, height: 256 }, true)
+        });
+
+        O("#profileEditorBanner").on("input", event => {
+            imageCropModal(event.target.files[0], "banner", ".profile-banner :is(img,video)", { width: 310, height: 160 })
+        });
+
         // Load more messages when scrolling
 
         let loadingMessages = false;
@@ -802,6 +1022,10 @@ M.on("load", async ()=>{
 
         .on("presence", (user, status) => {
             console.log(user, status);
+
+            for(let badge of Q(`[user-id="${user}"] .profile-presence-badge`)){
+                badge.setAttribute("ls-accent", status === 0? "gray": "green")
+            }
         })
 
         app.screen.setActive("home")

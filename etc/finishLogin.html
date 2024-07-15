@@ -6,21 +6,23 @@
 
             (async function(){
 
-                // shits not even working..
-                await fetch("https://api.extragon.cloud/v2/mazec/create_profile/", {
-                    method: "POST",
-                    body: "{}",
+                let profile = await(await fetch((location.origin.endsWith("test")? "http://api.extragon.test/v2/mazec": "https://api.extragon.cloud/v2/mazec") + "/user/create_profile/", {
                     headers: {
                         Authorization: location.hash.replace("#", "")
                     }
-                })
+                })).json()
 
-                location.replace("/")
+                if(!profile || (profile.error && profile.code !== 25)) {
+                    console.error(profile)
+                    document.querySelector("h3").innerHTML = "<b>Sorry, something went wrong while setting up your profile.</b><br><br>You can:<br><li>Refresh the page to try again</li><li>Contact me with a screenshot/copy of any errors in the console (ctrl+shift+c)</li><li style=color:red>Warning: Do not share the URL of this page with anyone, it might contain sensitive information.</li>"
+                } else location.replace("/")
             })()
         } else {
-            alert(`An error occured while trying to log in (i was lazy to do it properly so here's the whole thing we know: ${location.search})`)
+            alert(`Sorry! An unknown error has occured while trying to log you in (here's all we know: ${location.search})`)
+            location.replace("/")
         }
     </script>
+
     <style>
         :root {
             background-color: #111;
@@ -34,10 +36,11 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
+            font-family: sans-serif;
         }
     </style>
 
     <h3>
-        Please wait...
+        Finishing up, please wait...
     </h3>
 </body>

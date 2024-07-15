@@ -9,7 +9,7 @@
     }
 
     @resources {
-        js: /js/client.js, /js/ui.js, /js/app.js, https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js;
+        js: /js/client.js, /js/ui.js, /js/app.js, /js/cdn.js, https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js;
         css: /css/main.css, /css/format.css;
 
         ls-js: tiny, color, tabs, resize, tooltips, toast, nav, modal;
@@ -63,7 +63,13 @@
                 <br><br>
 
                 <ls-box style="display:flex;flex-direction:column">
-                    <a style="display: block; width: 100%" ls-accent="deep-orange" href="https://lstv.space/sso?app=11&ref=https%3A%2F%2Fchat.lstv.space%2Fauth-finish&permissions=16.w"><button style="width: 100%">Login with LSTV</button></a>
+                    <a style="display: block; width: 100%" ls-accent="deep-orange" %loginButton href="https://lstv.space/sso?app=11&ref=https%3A%2F%2Fchat.lstv.space%2Fauth-finish&permissions=16.w"><button style="width: 100%">Login with LSTV</button></a>
+
+
+                    <script @dev>
+                        O("#loginButton").href = (location.origin.endsWith("test")? "http://lstv.test/sso?app=11&ref=http%3A%2F%2Fchat.lstv.test": "https://lstv.space/sso?app=11&ref=https%3A%2F%2Fchat.lstv.space") + "%2Fauth-finish&permissions=16.w"
+                    </script>
+
                 </ls-box>
 
                 <br><br>
@@ -81,10 +87,6 @@
         </ls-tab>
 
         <ls-tab %settings>
-                <style>
-                
-                </style>
-                
                 <div .sidebar-container>
                     <div .sidebar %accountManageSidebar>
                         <div .sidebar-items>
@@ -93,6 +95,10 @@
                                 <i .bi-person-fill></i>
                                 Profile
                             </div>
+                            <div onclick="LS.Toast.show('lol, what did you think', {timeout: 2000})" .list-item .sidebar-item>
+                                <i .bi-credit-card-fill></i>
+                                Subscription
+                            </div>
                             <hr>
                             <div .list-item .sidebar-item style="color: rgb(219, 67, 67)" onclick="localStorage.clear(); location.reload()">
                                 <i .bi-door-closed-fill></i>
@@ -100,8 +106,17 @@
                             </div>
                         </div>
                     </div>
+
+                    <div %unsavedContent>
+                        You have some unsaved changes!
+                        <div>
+                            <button ls-accent="gray" onclick="app.ui.resetSettings()">Discard</button>
+                            <button ls-accent="green" onclick="app.ui.saveSettings()" %settingsSaveButton><span>Save</span><div hidden .loader></div></button>
+                        </div>
+                    </div>
                     
                     <div .sidebar-content-wrapper>
+
                         <div .sidebar-content>
                             <ls-tabs>
                                 <ls-tab %settings.profile>
@@ -109,38 +124,75 @@
     
                                     <br>
     
-                                    <ls-box .color ls-accent="orange"><i .bi-info></i> Currently your LSTV account and Maze profiles are separate and not synchronized. Your display name or avatar on LSTV will not be visible to Maze users and vice versa.</ls-box> <br> <br>
+                                    <ls-box .color ls-accent="orange"><i .bi-info></i> Note: Currently your LSTV account and Maze profiles are separate and not synchronized. Your display name or avatar on LSTV will not be visible to Maze users and vice versa.</ls-box> <br> <br>
     
                                     <div .profileEditorWrapper>
                                         <div .profileEditorContentWrapper>
                                             <div>
                                                 <span .sidebar-label>Display name</span> <br>
-                                                <input type="text">
+                                                <input type="text" %profileEditorDisplayname maxlength="50">
                                             </div>
     
                                             <div>
                                                 <span .sidebar-label>Avatar</span> <br>
-                                                <input type="file" hidden>
+                                                <input accept="image/*" type="file" hidden %profileEditorAvatar>
     
                                                 <ls-group join>
-                                                    <button><i .bi-person-bounding-box></i> Change</button>
+                                                    <button onclick="O('#profileEditorAvatar').click()"><i .bi-person-bounding-box></i> Change</button>
                                                     <button ls-accent="gray">Remove</button>
                                                 </ls-group>
                                             </div>
     
                                             <div>
                                                 <span .sidebar-label>Banner</span> <br>
-                                                <input type="file" hidden>
+                                                <input accept="image/*" type="file" hidden %profileEditorBanner>
     
                                                 <ls-group join>
-                                                    <button><i .bi-person-bounding-box></i> Change</button>
+                                                    <button onclick="O('#profileEditorBanner').click()"><i .bi-person-bounding-box></i> Change</button>
                                                     <button ls-accent="gray">Remove</button>
                                                 </ls-group>
                                             </div>
-    
+
                                             <div>
                                                 <span .sidebar-label>About me</span> <br>
-                                                <textarea %profileEditorBio></textarea>
+                                                <textarea maxlength="600" %profileEditorBio rows="8"></textarea> <br>
+                                                <span style="color: var(--elevate-3); margin-left: 10px">TIP: You can use markdown.</span>
+                                            </div>
+
+                                            <div>
+                                                <span .sidebar-label>Colors</span> <br> <br>
+
+                                                <label .ls-checkbox>
+                                                    Enable profile gradient
+                                                    <input type="checkbox" %profileEditorGradientToggle>
+                                                    <span></span>
+                                                </label>
+
+                                                <br>
+                                                <br>
+
+                                                <label .color-picker style="margin: 0 20px">
+                                                    <span .sidebar-label>Primary</span>
+                                                    <input type="color" %profileEditorGradientPrimary>
+                                                </label>
+
+                                                <label .color-picker>
+                                                    <span .sidebar-label>Secondary</span>
+                                                    <input type="color" %profileEditorGradientSecondary>
+                                                </label> <br> <br> <br> <br>
+                                            </div>
+
+                                            <div>
+                                                <span .sidebar-label>Miscellaneous</span> <br> <br>
+                                                <label .ls-checkbox>
+                                                    Mark my profile as NSFW
+                                                    <input type="checkbox" %profileEditorNSFWToggle>
+                                                    <span></span>
+                                                </label> <br> <br>
+                                                <span style="color: var(--elevate-3); margin-left: 10px; display: inline-block">
+                                                    When you mark your profile as NSFW,<br>it will be blured to everyone<br>who has NSFW disabled.<br>
+                                                    If our system determines your<br>profile as unsafe, this option<br>will be turned on automatically.
+                                                </span>
                                             </div>
                                         </div>
                                         <div .profileEditorPreviewWrapper>
@@ -269,21 +321,21 @@
     </div>
 
     <div %assets hidden>
-        <div %profilePopup .profile-view hidden>
-            <ls-box ls-tooltip="This account belongs to a bot" .color .bot-tag .profile-bot-badge accent="blue"><i .bi-robot></i> BOT</ls-box>
-
-            <div .profile-banner>
-                <img draggable="false">
-                <video loop autoplay muted></video>
-            </div>
-
-            <div .profile-avatar>
-                <img draggable="false">
-            </div>
-
-            <div .profile-box>
-                <h2 .profile-name></h2>
-                <div .profile-bio></div>
+        <div %profilePopup .profileWrapper hidden>
+            <div .profileInner>
+                <ls-box ls-tooltip="This account belongs to a bot" .color .bot-tag %profile-bot-badge accent="blue"><i .bi-robot></i> BOT</ls-box>
+    
+                <div .profile-banner>
+                    <img draggable="false">
+                    <video loop autoplay muted></video>
+                </div>
+    
+                <div .profile-avatar></div>
+    
+                <div .profileContent>
+                    <h2 .profile-name></h2>
+                    <div .profile-bio></div>
+                </div>
             </div>
         </div>
 
@@ -293,6 +345,22 @@
                 escape to cancel, enter to confirm
             </span>
         </div>
+
+        <ls-modal %cropModal>
+            <ls-modal-body>
+                <h2>Crop image</h2>
+                <div hidden .modalLoading>
+                    <div .loader></div>
+                </div>
+
+                <div hidden .cropperContainer></div>
+
+                <div .buttons>
+                    <button ls-accent="gray" onclick="app.cropModal.close()">Cancel</button>
+                    <button ls-accent="green" %settingsSaveImageButton><span>Apply</span><div hidden .loader></div></button>
+                </div>
+            </ls-modal-body>
+        </ls-modal>
 
         <ls-modal %joinChatModal>
             <ls-modal-body>

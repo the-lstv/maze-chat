@@ -366,10 +366,41 @@ api = {
 
             case "user":
                 if(!User || User.error) return error(13);
-                let user;
+                let user; // <= I dont know what this is but I'm scared to remove it
 
                 switch(shift()){
                     case "create_profile":
+                        if(cache.profiles[User.id]) return error(25); 
+
+                        let row = await mazeDatabase.table("chat.profiles").has("link", User.id);
+
+                        if(!row || row.err) return error(row.err), console.error(row.err);;
+
+                        if(row.result.length < 1) {
+
+                            let initialData = await mazeDatabase.query(`select username, displayname, pfp from \`users\` where id = ? limit 1`, [User.id])
+
+                            if(!initialData || initialData.err) return error(24), console.error(initialData.err);
+                            if(!initialData.result || initialData.result.length < 1) return error(6);
+
+                            initialData = initialData.result[0];
+
+                            let thing = await mazeDatabase.table("chat.profiles").insert({
+                                displayname: initialData.displayname || initialData.name,
+                                ... initialData.pfp? {avatar: initialData.avatar} : {},
+                                created: Date.now(),
+                                link: User.id
+                            })
+
+                            if(!thing || thing.err) return error(thing.err), console.error(thing.err);
+
+                            res.send(`{"success":true}`)
+                        } else {
+                            error(25)
+                        }
+                    break;
+
+                    case "patch":
                         req.parseBody(async (data, fail) => {
                             if(fail){
                                 return error(fail)
@@ -381,28 +412,29 @@ api = {
                                 return error(2)
                             }
 
-                            let row = await mazeDatabase.table("chat.profiles").has("link", User.id);
+                            let patch = {}
 
-                            if(row.err) return error(row.err);
+                            if(data.displayname && data.displayname.length <= 50 && data.displayname.length > 0) patch.displayname = data.displayname;
+                            if(data.bio && data.bio.length <= 600) patch.bio = data.bio;
+                            if(data.avatar && /^\b[a-f0-9]{32}\.[a-zA-Z0-9]+\b$/g.test(data.avatar)) patch.avatar = data.avatar;
+                            if(data.banner && /^\b[a-f0-9]{32}\.[a-zA-Z0-9]+\b$/g.test(data.banner)) patch.banner = data.banner;
+                            if(data.colors) patch.colors = data.colors;
+                            if(typeof data.nsfw === "boolean") patch.nsfw = data.nsfw;
 
-                            if(row.result.length < 1) {
-                                let thing = await mazeDatabase.table("chat.profiles").insert({
-                                    ...data,
-                                    created: Date.now(),
-                                    link: User.id
-                                })
+                            if(Object.keys(patch).length < 1) return res.send('{"success":true}')
 
-                                if(thing.err) return error(thing.err);
+                            let result = await mazeDatabase.table("chat.profiles").update("where link=" + (+User.id), patch)
 
-                                res.send(`{"success":true}`)
-                            } else {
-                                error("Profile for this user was already created. Did you mean to use \"patch\"?")
-                            }
+                            if(result && !result.err) {
+                                if(result.affectedRows < 1) return error(6);
+
+                                console.log(result);
+
+                                if(cache.profiles[User.id]) Object.assign(cache.profiles[User.id], patch) // Update cache
+
+                                return res.send('{"success":true}')
+                            } else return error(24), console.error(result.err);
                         }).data()
-                    break;
-
-                    case "patch":
-                        // ...
                     break;
 
                     case "profile":

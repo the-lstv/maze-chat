@@ -631,7 +631,15 @@
             _cleanProfile(profile){
                 profile.created = true
                 if(profile.id === app.client.user.id) profile.presence = 1;
-                if(profile.colors) profile.colors = profile.colors.split(",").map(color => window.C? C(color): color)
+
+                if(typeof profile.colors == "string") profile.colors = profile.colors.split(","); else profile.colors = [];
+
+                // if(typeof profile.colors == "string") if(window.LS && profile.avatar && !profile.colors[0]) {
+                //     let img = N("img", {crossOrigin: "anonymous", onload(){
+                //         profile.colors[0] = LS.Color.getAverageRGB(img).hex
+                //     }, src: `https://cdn.extragon.cloud/file/${profile.avatar}`})
+                // }
+
                 return profile
             }
     
@@ -781,12 +789,21 @@
                 return await app.client.getChats((await app.client.listChannels()).map(channel => channel.room))
             }
 
-            async server(){
-
-            }
-
             async listChannels(){
                 return _this.initialMembershipCache || await _this.request("/list").json()
+            }
+
+            async updateProfile(patch){
+                let result = await app.client.request("/user/patch", {
+                    method: "POST",
+                    body: JSON.stringify(patch)
+                }).json()
+
+                if(result && result.success){
+                    Object.assign(_this.profileCache[_this.user.id], patch)
+                }
+
+                return result
             }
         })())(gateway, options)
     }
