@@ -18,7 +18,8 @@ let enc = new TextEncoder,
         "delete",
         "status",
         "presence",
-        "versionCheck"
+        "versionCheck",
+        "profileChange"
     ],
 
     latest_client = "0.5.5",
@@ -188,10 +189,23 @@ function U82A(bytes) {
 }
 
 api = {
-    Initialize(backend_){
+    async Initialize(backend_){
         backend = backend_;
         db = backend_.db;
         mazeDatabase = db.database("extragon")
+
+        let lastReads = await mazeDatabase.query(`select * from \`chat.lastRead\``)
+        
+        for(let entry of lastReads.result){
+            if(!cache.read[entry.user]) cache.read[entry.user] = {};
+            cache.read[entry.user][entry.channel] = entry.time
+        }
+
+        let lastMessages = await mazeDatabase.query(`SELECT room, MAX(timestamp) AS timestamp FROM \`chat.messages\` GROUP BY room;`)
+        
+        for(let entry of lastMessages.result){
+            cache.lastMessage[entry.room] = entry.timestamp
+        }
     },
 
     util: {
@@ -288,10 +302,8 @@ api = {
             })
         },
 
-        async updatePresence(user, presence){
-            if(cache.presence[user] === presence) return;
-
-            cache.presence[user] = presence, membersNotified = [];
+        async broadcastToRelevantUsers(user, data, messageSelf = true){
+            let membersNotified = [];
 
             let userMemberships = await api.util.getMemberships(user);
 
@@ -303,14 +315,30 @@ api = {
 
                     membersNotified.push(membership.member)
 
-                    backend.broadcast(`maze.user.${membership.member}`, A2U8([
-                        eventList.get("presence"),
-                        user,
-                        presence
-                    ]), true, true)
-                }
+                    if(!messageSelf && user == membership.member) continue;
 
+                    backend.broadcast(`maze.user.${membership.member}`, data, true, true)
+                }
             }
+        },
+
+        async updatePresence(user, presence){
+            if(cache.presence[user] === presence) return;
+
+            cache.presence[user] = presence
+            
+            await api.util.broadcastToRelevantUsers(user, A2U8([
+                eventList.get("presence"),
+                user,
+                presence
+            ]))
+        },
+
+        async updateLastRead(user, id, date = Date.now()){
+            mazeDatabase.query(`INSERT INTO \`chat.lastRead\` (user, channel, time) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE time = VALUES(time);`, [user, id, date]);
+
+            if(!cache.read[user]) cache.read[user] = {};
+            cache.read[user][id] = date;
         },
 
         join(user, channel){
@@ -428,9 +456,21 @@ api = {
                             if(result && !result.err) {
                                 if(result.affectedRows < 1) return error(6);
 
-                                console.log(result);
-
                                 if(cache.profiles[User.id]) Object.assign(cache.profiles[User.id], patch) // Update cache
+
+                                let broadcast = Array(8).fill(0);
+
+                                broadcast[0] = eventList.get("profileChange");
+                                broadcast[1] = User.id;
+
+                                let i = 1;
+                                for(let key of ['displayname', 'bio', 'avatar', 'banner', 'colors', 'nsfw']){
+                                    i++;
+                                    if(!patch.hasOwnProperty(key)) continue;
+                                    broadcast[i] = patch[key]
+                                }
+
+                                api.util.broadcastToRelevantUsers(User.id, A2U8(broadcast), false)
 
                                 return res.send('{"success":true}')
                             } else return error(24), console.error(result.err);
@@ -477,7 +517,8 @@ api = {
                                 author: User.id,
                                 room: id,
                                 timestamp: Date.now(),
-                                type: 0
+                                type: 0,
+                                ...data.reply? {reply: data.reply}: {}
                             }
 
                             response = await mazeDatabase.table("chat.messages").insert(msg)
@@ -486,8 +527,8 @@ api = {
                                 msg.id = response.result.insertId;
 
                                 cache.lastMessage[id] = Date.now();
-                                if(!cache.read[User.id]) cache.read[User.id] = {};
-                                cache.read[User.id][id] = Date.now();
+
+                                api.util.updateLastRead(User.id, id)
 
                                 backend.broadcast(`maze.messages.${id}`, A2U8([
                                     eventList.get("message"),
@@ -498,7 +539,8 @@ api = {
                                     msg.attachments.replace(/[\[\]]/g, ""),
                                     msg.mentions.replace(/[\[\]]/g, ""),
                                     msg.text,
-                                    0
+                                    0,
+                                    ...msg.reply? [msg.reply]: []
                                 ]), true, true)
 
                                 res.send(JSON.stringify({id: msg.id}));
@@ -618,12 +660,11 @@ api = {
                             return error(2)
                         }
 
-                        if(!cache.read[User.id]) cache.read[User.id] = {};
-                        cache.read[User.id][id] = Date.now();
+                        api.util.updateLastRead(User.id, id)
 
                         // Todo: Implement memory caching
 
-                        let query = (req.getQuery("id") && typeof +req.getQuery("id") == "number")? [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false and id =?`, [id, (+req.getQuery("id")) || 0]] : [`select id, text, attachments, mentions, author, timestamp, edited, type from \`chat.messages\` where room=? and deleted = false order by id desc limit ${(+req.getQuery("limit")) || 10} offset ${(+req.getQuery("offset")) || 0}`, [id]];
+                        let query = (req.getQuery("id") && typeof +req.getQuery("id") == "number")? [`select id, text, attachments, mentions, author, timestamp, edited, reply, type from \`chat.messages\` where room=? and deleted = false and id =?`, [id, (+req.getQuery("id")) || 0]] : [`select id, text, attachments, mentions, author, timestamp, edited, type, reply, room from \`chat.messages\` where room=? and deleted = false order by id desc limit ${(+req.getQuery("limit")) || 10} offset ${(+req.getQuery("offset")) || 0}`, [id]];
                         
                         response = await mazeDatabase.query(...query)
                         

@@ -32,7 +32,8 @@
             "delete",
             "status",
             "presence",
-            "versionCheck"
+            "versionCheck",
+            "profileChange"
         ]
     ;
 
@@ -207,14 +208,15 @@
                 this.messageBuffer = {};
             }
 
-            async send(text, attachments, mentions){
+            async send(content, attachments, mentions){
+
+                if(typeof content === "string") content = {text: content};
+
                 this.typingTimeout = 0;
 
                 return await _this.parent.request("/channels/" + _this.id + "/post/", {
                     method: "POST",
-                    body: JSON.stringify({
-                        mentions, attachments, text
-                    })
+                    body: JSON.stringify(content)
                 }).json()
             }
 
@@ -401,6 +403,7 @@
                                         mentions: event[6],
                                         text: event[7],
                                         type: event[8],
+                                        reply: event[9] || 0,
                                     };
 
                                     let chat = this.chats[event[2]];
@@ -493,6 +496,28 @@
                                 if(_this.checkVersion(event[1]) == -1){
                                     _this.invoke("error.outdatedClient")
                                 }
+                            break;
+
+                            case "profileChange":
+                                let patch = {
+                                    id: event[1]
+                                }, keys = ['displayname', 'bio', 'avatar', 'banner', 'colors', 'nsfw'];
+
+                                let i = 1;
+                                for(let key of keys){
+                                    i++
+                                    if(event[i] !== 0){
+                                        patch[key] = event[i]
+                                    }
+                                }
+
+                                if(_this.profileCache[patch.id]){
+                                    Object.assign(_this.profileCache[patch.id], patch)
+                                    _this._cleanProfile(_this.profileCache[patch.id])
+                                    console.log(_this.profileCache[patch.id]);
+                                }
+
+                                _this.invoke("profileUpdate", patch)
                             break;
                         }
                     }
@@ -630,6 +655,7 @@
 
             _cleanProfile(profile){
                 profile.created = true
+
                 if(profile.id === app.client.user.id) profile.presence = 1;
 
                 if(typeof profile.colors == "string") profile.colors = profile.colors.split(","); else profile.colors = [];

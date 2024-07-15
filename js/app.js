@@ -69,15 +69,21 @@ M.on("load", async ()=>{
                     id: null,
                     timestamp: Date.now(),
                     text: content,
-                    sent: true
+                    sent: true,
+                    ...app.replyingMessage? {reply: app.replyingMessage}: {}
                 });
 
                 app.ui.messageContent.doc.setValue("")
                 app.ui.messagesScrollBottom()
 
-                let promise = app.activeChat.send(content)
+                let promise = app.activeChat.send({
+                    text: content,
+                    ...app.replyingMessage? {reply: app.replyingMessage}: {}
+                })
 
                 localStorage["maze.previousContent." + app.activeChat.id] = ""
+
+                app.replyingMessage = null;
 
                 setTimeout(async () => {
                     if(!app.awaitingMessage) return;
@@ -282,6 +288,10 @@ M.on("load", async ()=>{
                 app.activeChat.message(app.ui.activeMessage.id).delete()
             },
 
+            activeMessageReply(){
+                app.replyingMessage = app.ui.activeMessage.id;
+            },
+
             profileShown: false,
 
             get displayNsfw(){
@@ -311,7 +321,7 @@ M.on("load", async ()=>{
                 app.activeChat.traverseLocal(from, limit, (thisBuffer, i, nextBuffer) => {
                     if(!thisBuffer) return;
 
-                    let condense = !!nextBuffer && nextBuffer.type == 0 && nextBuffer.author === thisBuffer.author && (thisBuffer.timestamp - nextBuffer.timestamp) < 300000;
+                    let condense = !!nextBuffer && !nextBuffer.reply && !thisBuffer.reply && nextBuffer.type == 0 && nextBuffer.author === thisBuffer.author && (thisBuffer.timestamp - nextBuffer.timestamp) < 300000;
                     if(thisBuffer.renderBuffer) thisBuffer.renderBuffer.class("condensed", condense)
                 })
             },
@@ -390,6 +400,20 @@ M.on("load", async ()=>{
 
         get activeChat(){
             return app.client.chats[app.activeChatID]
+        },
+
+        _replyingMessage: null,
+
+        get replyingMessage(){
+            return app._replyingMessage;
+        },
+
+        set replyingMessage(value){
+            app._replyingMessage = value;
+
+            if(value) {
+                O(".replyingMessage").show("flex").get("b").set("user")
+            } else O(".replyingMessage").hide()
         },
 
         htmlUnEscape(text){
@@ -627,8 +651,10 @@ M.on("load", async ()=>{
                 break;
             }
 
+            let channel = app.client.chats[messageBuffer.room];
+
             let element = N({
-                class: "maze-message " + (messageBuffer.author == app.client.user.id? "own" : "not-own") + (profile.nsfw? " nsfw": "") + (messageBuffer.sent? " sent-message-waiting" : ""),
+                class: "maze-message " + (messageBuffer.author == app.client.user.id? "own" : "not-own") + (profile.nsfw? " nsfw": "") + (messageBuffer.sent? " sent-message-waiting" : "") + (messageBuffer.reply? " message-reply" : ""),
                 
                 attr: {
                     "message-type": String(messageBuffer.type)
@@ -638,6 +664,13 @@ M.on("load", async ()=>{
                 inner: [
 
                     ...messageBuffer.type == 0? [
+                        ...messageBuffer.reply && channel && channel.messageBuffer[messageBuffer.reply]? [
+                            N({inner: [
+                                app.getAvatar(await app.client.profile(channel.messageBuffer[messageBuffer.reply].author)),
+                                N({innerText: channel.messageBuffer[messageBuffer.reply].text.substring(0, 500).replaceAll("\n", " "), class: "message-reply-text"})
+                            ], class: "message-reply-target", onclick(){ app.scrollToMessage(channel.messageBuffer[messageBuffer.reply]) }}),
+                        ] : [],
+
                         N({inner: [
                             app.getAvatar(profile)
                         ], class: "maze-message-avatar", attr: {"load": "solid"}, onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
@@ -698,21 +731,48 @@ M.on("load", async ()=>{
             return element
         },
 
-        getAvatar(profile, size = 80, badge = false){
+        updateAvatar(avatarView, profile, size, badge){
             if(typeof profile === "string") profile = {avatar: profile}
 
+            let previousSource = "";
+
+            if(avatarView.has(".profile-avatar-source has-badge")) {
+                let source = avatarView.get('.profile-avatar-source has-badge');
+                previousSource = source.src || ""
+                source.remove()
+            }
+
             let isAnimated = profile.avatar && (profile.avatar.endsWith("webm") || profile.avatar.endsWith("mp4"))
+
+            if(!size) {
+                size = (+previousSource.split("size=").at(-1)) || 80
+            }
+
+            if(typeof badge !== "boolean") {
+                badge = avatarView.has(".profile-presence-badge")
+            }
+
+            avatarView.set([
+                N(isAnimated? "video": "img", {
+                    src: "https://cdn.extragon.cloud/file/" + (profile.avatar || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!profile.avatar || profile.avatar.endsWith("svg")? "" : "?size=" + size),
+                    class: "profile-avatar-source" + (badge? " has-badge": ""),
+                    draggable: false,
+                    ...isAnimated? {attr: ["loop", "autoplay", "muted"]}: {}
+                }),
+                badge? N({
+                    class: "profile-presence-badge",
+                    accent: profile.presence == 0? "gray": "green"
+                }): ""
+            ])
+        },
+
+        getAvatar(profile, size = 80, badge = false){
+            if(typeof profile === "string") profile = {avatar: profile}
 
             let element = N({
                 class: "profile-avatar-source-container",
                 attr: {"user-id": typeof profile.id !== "undefined"? String(profile.id) : ""},
                 inner: [
-                    N(isAnimated? "video": "img", {
-                        src: "https://cdn.extragon.cloud/file/" + (profile.avatar || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!profile.avatar || profile.avatar.endsWith("svg")? "" : "?size=" + size),
-                        class: "profile-avatar-source" + (badge? " has-badge": ""),
-                        draggable: false,
-                        ...isAnimated? {attr: ["loop", "autoplay", "muted"]}: {}
-                    }),
                     badge? N({
                         class: "profile-presence-badge",
                         accent: profile.presence == 0? "gray": "green"
@@ -720,7 +780,13 @@ M.on("load", async ()=>{
                 ]
             })
 
+            app.updateAvatar(element, profile, size, badge)
+
             return element
+        },
+
+        async updateProfile(id){
+            await app.showProfile(id, app.ui.profileX, app.ui.profileY)
         },
 
         async showProfile(id, x = M.x, y = M.y){
@@ -728,7 +794,11 @@ M.on("load", async ()=>{
 
             LS._topLayerInherit()
 
+            app.ui.profileX = x
+            app.ui.profileY = y
+
             app.ui.profileShown = true
+            app.ui.profileShownID = id
 
             let profile = await app.client.profile(id);
 
@@ -745,17 +815,7 @@ M.on("load", async ()=>{
 
             container.get(".profile-avatar").set(app.getAvatar(profile, 256));
 
-            container.getAll(".profile-banner :is(video, img)").all().applyStyle({display: "none"})
-
-            if(profile.banner){
-                if(profile.banner.endsWith("webm") || profile.banner.endsWith("mp4")){
-                    container.get(".profile-banner video").show()
-                    container.get(".profile-banner video").src = "https://cdn.extragon.cloud/file/" + profile.banner;
-                } else {
-                    container.get(".profile-banner img").show()
-                    container.get(".profile-banner img").src = "https://cdn.extragon.cloud/file/" + profile.banner + "?size=544,272";
-                }
-            }
+            app.showBanner(profile.banner)
 
             for(let i = 0; i < 3; i++) container.style.setProperty("--custom-color-" + i, profile.colors[i] || "var(--ui)");
 
@@ -767,6 +827,38 @@ M.on("load", async ()=>{
                 left: Math.min(x, innerWidth - container.getBoundingClientRect().width - 20) +"px",
                 top: Math.min(y, innerHeight - container.getBoundingClientRect().height - 20) +"px"
             })
+        },
+
+        showBanner(banner, raw){
+            let container = O("#profilePopup");
+
+            container.getAll(".profile-banner :is(video, img)").all().applyStyle({display: "none"})
+
+            if(banner){
+                if(banner.endsWith("webm") || banner.endsWith("mp4")){
+                    container.get(".profile-banner video").show()
+                    container.get(".profile-banner video").src = (raw? "" : "https://cdn.extragon.cloud/file/") + banner;
+                } else {
+                    container.get(".profile-banner img").show()
+                    container.get(".profile-banner img").src = (raw? "" : "https://cdn.extragon.cloud/file/") + banner + (raw? "" : "?size=544,272");
+                }
+            }
+        },
+
+        scrollToMessage(message){
+            if(!message.renderBuffer){
+                return
+            }
+
+            message.renderBuffer.scrollIntoView({
+                behavior: "smooth"
+            })
+
+            message.renderBuffer.class("highlight")
+
+            setTimeout(() => {
+                message.renderBuffer.class("highlight", false)
+            }, 800)
         },
 
         async temporary_renderPubliChannels(){
@@ -966,7 +1058,12 @@ M.on("load", async ()=>{
 
                         };
 
-                        image.src = O(preview).src = URL.createObjectURL(blob);
+                        let url = URL.createObjectURL(blob);
+
+                        if(key == "banner") {
+                            image.src = url;
+                            app.showBanner(url, true)
+                        } else image.src = O(preview).src = url;
                     });
                 }
             }, 350)
@@ -1027,6 +1124,48 @@ M.on("load", async ()=>{
                 badge.setAttribute("ls-accent", status === 0? "gray": "green")
             }
         })
+        
+        .on("profileUpdate", async (patch) => {
+            if(patch.id === app.ui.profileShownID){
+                app.updateProfile(patch.id)
+            }
+
+            if(patch.avatar){
+                for(let element of Q(`[user-id="${patch.id}"]`)){
+                    app.updateAvatar(element, app.client.profileCache[patch.id])
+                }
+            }
+        })
+
+
+
+        // Keyboard controls
+
+        let keyStack;
+
+        M.on("keyup", event => {
+            switch(event.key){
+                case "Escape":
+                    if(app.screen.activeTab === "settings") app.screen.setActive("home");
+
+                    else if(app.replyingMessage) app.replyingMessage = null
+                break;
+
+                default:
+                    if(app.screen.activeTab === "home"){
+                        if(!event.ctrlKey && !(app.ui.messageContent.hasFocus() || app.ui.messageEditContent.hasFocus()) && app.activeChat && document.activeElement.tagname !== "TEXTAREA" && /^[a-zA-Z0-9\s]$/.test(event.key)) {
+                            O("#messageContent textarea").focus()
+
+                            app.ui.messageContent
+
+                            event.preventDefault();
+                            app.ui.messageContent.replaceSelection(event.key);
+                        }
+                    }
+                break;
+            }
+        })
+
 
         app.screen.setActive("home")
 
