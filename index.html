@@ -391,15 +391,12 @@
                         // Temporary
 
                         O("#publicChannelJoin").on("click", async () => {
-                            let resonse = await app.client.request("/join", {
-                                method: "POST",
-                                body: JSON.stringify({
-                                    channel: +O("#publicChannelID").value
-                                })
+                            let resonse = await app.client.request(`/channels/${+O("#publicChannelID").value}/join`, {
+                                method: "GET"
                             }).json()
 
                             if(!resonse.success){
-                                LS.Modal.build({title:"Could not join channel", content: "Are you sure the channel exists and you have permissions to join it?\n(And also that you arent already a member of this channel)", buttons: ["ok"]}).show()
+                                LS.Modal.build({title:"Could not join channel", content: "Are you sure the channel exists and you have permissions to join it?\n(And also that you arent already a member of this channel)\n" + resonse.error, buttons: ["ok"]}).show()
                             } else {
                                 LS.Modal.build({title:"Success", content: "Public channel joined", buttons: ["ok"]}).show()
                                 app.joinServerModal.close()

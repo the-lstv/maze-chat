@@ -46,147 +46,7 @@ eventList.get = function(name){
     return eventList[eventList.indexOf(name)]
 }
 
-function A2U8(...data) {
-    let result = [], i = 0;
-    for(const event of data) {
-        if(!Array.isArray(event)) continue;
-
-        let firstElementProcessed = false;
-
-        for(const value of event){
-            let number = value, encoded, isString = (typeof value == "string");
-
-            if (!firstElementProcessed) {
-                result.push(isString ? eventList.indexOf(value) : value);
-                firstElementProcessed = true;
-                continue;
-            }
-
-            if(typeof value == "boolean"){
-                result.push(value? 2 : 1);
-                continue
-            }
-
-            if (isString){
-
-                if(value === ""){
-                    result.push(21)
-                    continue
-                }
-
-                encoded = encode(value)
-                number = encoded.length;
-
-            } else if (value >= 0 && value <= 155) {
-
-                // Numbers 0 to 155 can have a dedicated byte
-                result.push(value + 100);
-                continue
-
-            }
-
-            const bytes = [];
-            number = BigInt(number);
-
-            while (number > 0) {
-                bytes.push(Number(number & 0xFFn));
-                number >>= 8n;
-            }
-
-            const length = bytes.length;
-            if (length === 0) {
-                bytes.push(0);
-            }
-
-            result.push(length + (isString ? 10 : 2), ...bytes);
-
-            if (isString){
-                result.push(...encoded)
-            }
-        }
-
-        i++;
-
-        if(i != data.length && data[i].length > 0) result.push(0);
-    }
-
-    return new Uint8Array(result.filter(b => b < 256))
-}
-
-function U82A(bytes) {
-    let result = [],
-        c = [],
-        separator = false,
-        skip = 0
-    ;
-
-    for(let i = 0; i < bytes.length; i++){
-        let byte = bytes[i];
-        if(skip > 0) {
-            skip--
-            continue
-        }
-
-        if(separator || i === 0){
-            if(separator){
-                result.push(c)
-                c = []
-            }
-            c.push(eventList[byte])
-            separator = false
-            continue
-        }
-
-        if( byte === 0 ){
-            separator = true
-            continue
-        }
-        
-        if( byte === 1 || byte === 2 ){
-            c.push(byte == 2)
-            continue
-        }
-        
-        if( byte === 21 ){
-            c.push("")
-            continue
-        }
-
-        let isString = byte >= 11 && byte <= 20;
-
-        if( (byte >= 3 && byte <= 10) || isString ){
-            let size = byte - (isString? 10 : 2)
-            let num = BigInt(0);
-            for (let j = 0; j < size; j++) {
-                num += BigInt(bytes[i + (j + 1)] || 0) << (BigInt(j) * 8n);
-            }
-
-            num = Number(num);
-            
-            i += (size)
-
-            if(isString){
-                c.push(
-                    decode(new Uint8Array(bytes.slice(i + 1, i + num + 1)))
-                )
-
-                i += (num)
-            } else {
-                c.push(num)
-            }
-
-
-            continue
-        }
-        if( byte >= 100 && byte <= 255 ){
-            c.push(byte - 100)
-            continue
-        }
-    }
-    result.push(c)
-
-    return result;
-}
+let NativeEncoder = require('../native/build/Release/fastEncoder');
 
 api = {
     async Initialize(backend_){
@@ -218,7 +78,7 @@ api = {
             if(missingCache.length > 0) {
                 let profiles = await mazeDatabase.query(`SELECT link, displayname, avatar, banner, bio, status, colors, nsfw, bot FROM \`chat.profiles\` WHERE link in (${missingCache.join()})`)
                 
-                if(profiles.err) return error(24), console.error(profiles.err);
+                if(profiles.err) return {error: 24}, console.error(profiles.err);
                 
                 for(let profile of profiles.result){
                     profile.bot = !!profile.bot[0]
@@ -251,7 +111,7 @@ api = {
             if(missingCache.length > 0) {
                 let response = await mazeDatabase.query(`select * from \`chat.rooms\` where id in (${missingCache.join()})`)
                 
-                if(response.err) return error(24), console.error(response.err);
+                if(response.err) return {error: 24}, console.error(response.err);
                 
                 for(let channel of response.result){
                     cache.channels[channel.id] = channel
@@ -327,7 +187,7 @@ api = {
 
             cache.presence[user] = presence
             
-            await api.util.broadcastToRelevantUsers(user, A2U8([
+            await api.util.broadcastToRelevantUsers(user, NativeEncoder.A2U8([
                 eventList.get("presence"),
                 user,
                 presence
@@ -345,10 +205,12 @@ api = {
 
             // Join a server, channel, or DM
 
-            let membership = {};
+            let membership = {
+                member: user
+            }
 
             return new Promise((resolve, reject) => {
-                if(typeof options !== "object" || !options.id || !options.type) return resolve({error: "Invalid options"});
+                if(typeof options !== "object" || typeof options.id !== "number" || isNaN(options.id) || !options.type) return resolve({error: "Invalid options"});
     
                 mazeDatabase.query(
                     `SELECT * FROM \`chat.rooms.members\` WHERE member = ? AND ${options.type == "server"? "server": "room"} = ? LIMIT 1`,
@@ -356,7 +218,7 @@ api = {
     
                     async function(err, results) {
                         if(!err){
-                            if(results.length > 0 && results[0].isBanned && options.isBanned !== false) return resolve({error: "User is banned"});
+                            if(results.length > 0 && !!results[0].isBanned[0] && options.isBanned !== false) return resolve({error: "User is banned"});
 
                             if(options.type == "channel") membership.room = options.id;
                             if(options.type == "server") membership.server = options.id;
@@ -366,8 +228,7 @@ api = {
                             membership.isMember = typeof options.isMember === "boolean"? options.isMember: true;
 
                             if(results.length){
-                                membership.memberSince = results[0].memberSince
-                                response = await mazeDatabase.table("chat.rooms.members").update(`where ${options.type == "server"? "server": "room"}=${+options.id} and user=${+user}`, membership)
+                                response = await mazeDatabase.table("chat.rooms.members").update(`where ${options.type == "server"? "server": "room"}=${+options.id} and member=${+user}`, membership)
                             } else {
                                 membership.memberSince = Date.now()
                                 response = await mazeDatabase.table("chat.rooms.members").insert(membership);
@@ -378,15 +239,21 @@ api = {
 
                                 if(!membership.bannedUntil) membership.bannedUntil = null;
 
-                                
-                                cache.memberships.user[user] = membership
-                                cache.memberships[options.type == "server"? "server": "channel"][options.id] = membership
-                                
-                                if(results.length && membership.isMember) {
-                                    resolve(true)
+                                // Uh, this is some very terrible code
+
+                                await api.util.getMemberships(user)
+                                await api.util.getMemberships(null, options.type == "server"? options.id: null, options.type == "channel"? options.id: null)
+
+                                if(!cache.memberships.user[user].find(membership => membership[options.type == "server"? "server": "room"] === options.id)){
+                                    cache.memberships.user[user].push(membership)
+                                    cache.memberships[options.type == "server"? "server": "channel"][options.id].push(membership)
                                 }
 
-                                resolve(true)
+                                if(results.length && membership.isMember) {
+                                    return resolve({success: true, updated: true})
+                                }
+
+                                resolve({success: true, updated: false})
 
                                 // response = await mazeDatabase.table("chat.messages").insert({
                                 //     text: "",
@@ -401,7 +268,7 @@ api = {
                                 // if(!response.err){
                                 //     let msg_id = response.result.insertId;
 
-                                //     backend.broadcast(`maze.messages.${data.channel}`, A2U8([
+                                //     backend.broadcast(`maze.messages.${data.channel}`, NativeEncoder.A2U8([
                                 //         eventList.get("message"),
                                 //         user,
                                 //         data.channel,
@@ -417,16 +284,8 @@ api = {
                                 //     console.error(response.err);
                                 //     return error(24)
                                 // }
-                            } else {
-                                console.log(response.err);
-                                return error(24)
-                            }
-    
-                            let membership = {
-                                member: user,
-                                memberSince: Date.now()
-                            }
-                        } else return resolve(false), console.error(err);
+                            } else return resolve({error: "Could not join"}), console.log(response.err);
+                        } else return resolve({error: "Could not get up-to-date information"}), console.error(err);
                     }
                 )
             })
@@ -558,7 +417,7 @@ api = {
                                     broadcast[i] = patch[key]
                                 }
 
-                                api.util.broadcastToRelevantUsers(User.id, A2U8(broadcast), false)
+                                api.util.broadcastToRelevantUsers(User.id, NativeEncoder.A2U8(broadcast), false)
 
                                 return res.send('{"success":true}')
                             } else return error(24), console.error(result.err);
@@ -573,7 +432,7 @@ api = {
                 }
             break;
 
-            case servers:
+            case "servers":
                 if(User.error) return error(13);
                 id = shift();
 
@@ -632,19 +491,12 @@ api = {
                     case "join":
                         if(User.error) return error(13);
 
-                        req.parseBody(async (data, fail) => {
-                            if(fail){
-                                return error(fail)
-                            }
+                        // TO-DO: re-add POST for more join options
 
-                            data = data.json;
-
-                            if(typeof data !== "object" || !(data.channel || data.server)){
-                                return error(2)
-                            }
-
-                            // ..
-                        }).data()
+                        res.send(JSON.stringify(await api.util.join(User.id, {
+                            type: "channel",
+                            id: +id
+                        })))
                     break;
 
                     case "send": case "post":
@@ -686,7 +538,7 @@ api = {
 
                                 api.util.updateLastRead(User.id, id)
 
-                                backend.broadcast(`maze.messages.${id}`, A2U8([
+                                backend.broadcast(`maze.messages.${id}`, NativeEncoder.A2U8([
                                     eventList.get("message"),
                                     msg.author,
                                     msg.room,
@@ -747,7 +599,7 @@ api = {
                                 //     }
                                 // }
 
-                                backend.broadcast(`maze.messages.${id}`, A2U8([
+                                backend.broadcast(`maze.messages.${id}`, NativeEncoder.A2U8([
                                     eventList.get("edit"),
                                     id,
                                     (+data.id),
@@ -796,7 +648,7 @@ api = {
                                 //     }
                                 // }
 
-                                backend.broadcast(`maze.messages.${id}`, A2U8([
+                                backend.broadcast(`maze.messages.${id}`, NativeEncoder.A2U8([
                                     eventList.get("delete"),
                                     id,
                                     (+data.id)
@@ -899,13 +751,13 @@ api = {
                 // ws.queue.push(data)
 
                 if(ws.alive){
-                    ws.send(A2U8(data), true, true);
+                    ws.send(NativeEncoder.A2U8(data), true, true);
                 }
             }
 
             // ws.queueInterval = setInterval(function sendQueue(){
             //     if(ws.alive && ws.queue.length > 0){
-            //         ws.send(A2U8(...ws.queue));
+            //         ws.send(NativeEncoder.A2U8(...ws.queue));
             //         ws.queue = []
             //     }
             // }, 100)
@@ -929,7 +781,7 @@ api = {
         },
     
         message(ws, message, isBinary){
-            for(let data of U82A(new Uint8Array(message))){
+            for(let data of NativeEncoder.U82A(new Uint8Array(message))){
 
                 if(!ws.authorized && data[0] !== "authorize") continue;
 
@@ -958,7 +810,7 @@ api = {
 
                             ws.subscribe("maze.user." + user.id)
 
-                            ws.send(A2U8([
+                            ws.send(NativeEncoder.A2U8([
                                 eventList.get("versionCheck"),
                                 lowest_client,
                                 latest_client
@@ -969,7 +821,7 @@ api = {
                     case "message": break;
 
                     case "typing":
-                        backend.broadcast(`maze.messages.${data[1]}`, A2U8([eventList.get("typing"), data[1], ws.user.id]), true)
+                        backend.broadcast(`maze.messages.${data[1]}`, NativeEncoder.A2U8([eventList.get("typing"), data[1], ws.user.id]), true)
                     break;
 
                     case "subscribe":
