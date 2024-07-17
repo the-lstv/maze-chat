@@ -22,8 +22,8 @@ let enc = new TextEncoder,
         "profileChange"
     ],
 
-    latest_client = "0.5.5",
-    lowest_client = "0.5.0",
+    latest_client = "0.6.2",
+    lowest_client = "0.6.0",
 
     cache = {
         profiles: {},

@@ -18,7 +18,7 @@
         encode = (text) => enc.encode(text),
         decode = (bytes) => dec.decode(bytes),
 
-        version = "0.5.0",
+        version = "0.6.0",
 
         globalTimeStart = 1697840000000,
         eventList = [
