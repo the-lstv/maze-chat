@@ -1,13 +1,10 @@
 var api, backend, db, mazeDatabase;
 
-let clients = {}, globalMessageID = 0;
-
-let enc = new TextEncoder,
-    dec = new TextDecoder,
-    encode = (text) => enc.encode(text),
-    decode = (bytes) => dec.decode(bytes),
-    globalTimeStart = 1697840000000,
+let globalTimeStart = 1697840000,
     eventList = [
+
+        // MUST be syncronized with "/native/fastEncoder.cpp" and "/js/client.js"
+
         "heartbeat",
         "message",
         "subscribe",
@@ -37,6 +34,7 @@ let enc = new TextEncoder,
         presence: {},
         numConnections: {},
         channels: {},
+        servers: {},
         read: {},
         lastMessage: {}
     }
@@ -54,6 +52,8 @@ api = {
         db = backend_.db;
         mazeDatabase = db.database("extragon")
 
+        // Preload cache
+
         let lastReads = await mazeDatabase.query(`select * from \`chat.lastRead\``)
         
         for(let entry of lastReads.result){
@@ -61,20 +61,20 @@ api = {
             cache.read[entry.user][entry.channel] = entry.time
         }
 
-        let lastMessages = await mazeDatabase.query(`SELECT room, MAX(timestamp) AS timestamp FROM \`chat.messages\` GROUP BY room;`)
+        let lastMessages = await mazeDatabase.query(`select channel, max(timestamp) as timestamp from \`chat.messages\``)
         
         for(let entry of lastMessages.result){
-            cache.lastMessage[entry.room] = entry.timestamp
+            cache.lastMessage[entry.channel] = entry.timestamp
         }
     },
 
     util: {
         async getProfiles(list){
             let users = list.filter(_ => _ || _ === 0).map(id => id == "me"? User.id: +id).filter(_ => !isNaN(_)), result = [];
-            
-            
+
+
             let missingCache = users.filter(_ => !cache.profiles[_]);
-            
+
             if(missingCache.length > 0) {
                 let profiles = await mazeDatabase.query(`SELECT link, displayname, avatar, banner, bio, status, colors, nsfw, bot FROM \`chat.profiles\` WHERE link in (${missingCache.join()})`)
                 
@@ -109,7 +109,7 @@ api = {
             let missingCache = channels.filter(_ => !cache.channels[_]);
             
             if(missingCache.length > 0) {
-                let response = await mazeDatabase.query(`select * from \`chat.rooms\` where id in (${missingCache.join()})`)
+                let response = await mazeDatabase.query(`select * from \`chat.channels\` where id in (${missingCache.join()})`)
                 
                 if(response.err) return {error: 24}, console.error(response.err);
                 
@@ -130,6 +130,37 @@ api = {
             return result
         },
 
+        async getServers(list){
+            let servers = list.filter(_ => _ || _ === 0).map(id => +id).filter(_ => !isNaN(_)), result = [];
+
+            let missingCache = servers.filter(_ => !cache.servers[_]);
+            
+            if(missingCache.length > 0) {
+                let response = await mazeDatabase.query(`select s.*, GROUP_CONCAT(c.id) as channels from \`chat.servers\` s left join  \`chat.channels\` c ON s.id = c.server where s.id in (${missingCache.join()})`)
+                
+                if(response.err) return {error: 24}, console.error(response.err);
+                
+                for(let server of response.result){
+                    if(!server.id) continue;
+
+                    server.isPublic = server.isPublic && !!server.isPublic[0]
+                    server.channels = server.channels.split(",").map(id => +id)
+                    cache.servers[server.id] = server
+                }
+            }
+
+            for(let server of servers){
+                if(cache.servers[server]) result.push(cache.servers[server])
+                
+                else result.push({
+                    server,
+                    success: false
+                })
+            }
+
+            return result
+        },
+
         getMemberships(user = null, server = null, channel = null){
             let isUser = typeof user === "number", isServer = typeof server === "number", isChannel = typeof channel === "number";
 
@@ -139,7 +170,7 @@ api = {
 
             return new Promise(resolve => {
                 mazeDatabase.query(
-                    `SELECT * FROM \`chat.rooms.members\` WHERE ${isUser? "member": isServer? "server": "room"} = ?`,
+                    `SELECT * FROM \`chat.channels.members\` WHERE ${isUser? "member": isServer? "server": "channel"} = ?`,
                     [isUser? user: isServer? server: channel],
     
                     function(err, results) {
@@ -168,7 +199,7 @@ api = {
             let userMemberships = await api.util.getMemberships(user);
 
             for(let membership of userMemberships){
-                let channelMembers = await api.util.getMemberships(null, membership.server || null, membership.room || null)
+                let channelMembers = await api.util.getMemberships(null, membership.server || null, membership.channel || null)
                 
                 for(let membership of channelMembers){
                     if(membersNotified.includes(membership.member)) continue;
@@ -209,18 +240,20 @@ api = {
                 member: user
             }
 
+            // TODO: needs changes
+
             return new Promise((resolve, reject) => {
                 if(typeof options !== "object" || typeof options.id !== "number" || isNaN(options.id) || !options.type) return resolve({error: "Invalid options"});
     
                 mazeDatabase.query(
-                    `SELECT * FROM \`chat.rooms.members\` WHERE member = ? AND ${options.type == "server"? "server": "room"} = ? LIMIT 1`,
+                    `SELECT * FROM \`chat.channels.members\` WHERE member = ? AND ${options.type == "server"? "server": "channel"} = ? LIMIT 1`,
                     [user, options.id],
     
                     async function(err, results) {
                         if(!err){
                             if(results.length > 0 && !!results[0].isBanned[0] && options.isBanned !== false) return resolve({error: "User is banned"});
 
-                            if(options.type == "channel") membership.room = options.id;
+                            if(options.type == "channel") membership.channel = options.id;
                             if(options.type == "server") membership.server = options.id;
 
                             if(options.owner) membership.isOwner = true;
@@ -228,10 +261,10 @@ api = {
                             membership.isMember = typeof options.isMember === "boolean"? options.isMember: true;
 
                             if(results.length){
-                                response = await mazeDatabase.table("chat.rooms.members").update(`where ${options.type == "server"? "server": "room"}=${+options.id} and member=${+user}`, membership)
+                                response = await mazeDatabase.table("chat.channels.members").update(`where ${options.type == "server"? "server": "channel"}=${+options.id} and member=${+user}`, membership)
                             } else {
-                                membership.memberSince = Date.now()
-                                response = await mazeDatabase.table("chat.rooms.members").insert(membership);
+                                membership.memberSince = Date.now() / 1000
+                                response = await mazeDatabase.table("chat.channels.members").insert(membership);
                             }
                             
                             if(!response.err){
@@ -244,7 +277,7 @@ api = {
                                 await api.util.getMemberships(user)
                                 await api.util.getMemberships(null, options.type == "server"? options.id: null, options.type == "channel"? options.id: null)
 
-                                if(!cache.memberships.user[user].find(membership => membership[options.type == "server"? "server": "room"] === options.id)){
+                                if(!cache.memberships.user[user].find(membership => membership[options.type == "server"? "server": "channel"] === options.id)){
                                     cache.memberships.user[user].push(membership)
                                     cache.memberships[options.type == "server"? "server": "channel"][options.id].push(membership)
                                 }
@@ -260,8 +293,8 @@ api = {
                                 //     mentions: "[]",
                                 //     attachments: "[]",
                                 //     author: user,
-                                //     room: data.channel,
-                                //     timestamp: Date.now(),
+                                //     channel: data.channel,
+                                //     timestamp: Date.now() / 1000,
                                 //     type: 2
                                 // })
 
@@ -301,7 +334,7 @@ api = {
         switch(shift()){
             case "": case null:
                 // Do not move the below line to the request as "req" cannot be accessed after awaiting.
-                let includeProfile = typeof req.getQuery("profile") === "string", includeChannels = typeof req.getQuery("channels") === "string";
+                let includeProfile = typeof req.getQuery("profile") === "string", includeMemberships = typeof req.getQuery("channels") === "string";
 
                 res.send(JSON.stringify({
                     auth: "/user/",
@@ -311,8 +344,8 @@ api = {
                         user_profile: (await api.util.getProfiles([User.id]))[0]
                     } : {},
 
-                    ...User && includeChannels? {
-                        user_channels: await api.util.getMemberships(User.id)
+                    ...User && includeMemberships? {
+                        user_memberships: await api.util.getMemberships(User.id)
                     } : {},
 
                     latest_client,
@@ -325,11 +358,6 @@ api = {
                 // todo: implement fast_stringify, possibly change things around
             break;
 
-            case "stats":
-                res.send(JSON.stringify({
-                    active_clients: clients.length
-                }))
-            break;
 
             case "list":
                 if(!User || User.error) return error(13);
@@ -363,7 +391,7 @@ api = {
                             let thing = await mazeDatabase.table("chat.profiles").insert({
                                 displayname: initialData.displayname || initialData.name,
                                 ... initialData.pfp? {avatar: initialData.avatar} : {},
-                                created: Date.now(),
+                                created: Date.now() / 1000,
                                 link: User.id
                             })
 
@@ -432,13 +460,6 @@ api = {
                 }
             break;
 
-            case "servers":
-                if(User.error) return error(13);
-                id = shift();
-
-
-            break;
-
             case "channels":
                 if(User.error) return error(13);
                 id = shift();
@@ -461,7 +482,7 @@ api = {
                             if(typeof data.location == "string") data.location = ["channel", "dm", "server", "group"].indexOf(data.location);
                             if(typeof data.type == "string") data.type = ["text", "announcement", "voice"].indexOf(data.type);
         
-                            response = await mazeDatabase.table("chat.rooms").insert({
+                            response = await mazeDatabase.table("chat.channels").insert({
                                 author: User.id,
                                 name: data.name,
                                 icon: data.icon || "",
@@ -474,11 +495,10 @@ api = {
                             })
             
                             if(!response.err){
-                                mazeDatabase.table("chat.rooms.members").insert({
-                                    member: User.id,
-                                    room: response.result.insertId,
-                                    isOwner: true,
-                                    memberSince: Date.now()
+                                api.util.join(User.id, {
+                                    type: "channel",
+                                    id: response.result.insertId,
+                                    owner: true
                                 })
         
                                 res.send("" + response.result.insertId)
@@ -523,8 +543,8 @@ api = {
                                 mentions: Array.isArray(data.mentions) ? data.mentions.map(e => +e ).filter(e => !isNaN(e)) : "[]",
                                 attachments: data.attachments || "[]",
                                 author: User.id,
-                                room: id,
-                                timestamp: Date.now(),
+                                channel: id,
+                                timestamp: Date.now() / 1000,
                                 type: 0,
                                 ...data.reply? {reply: data.reply}: {}
                             }
@@ -541,7 +561,7 @@ api = {
                                 backend.broadcast(`maze.messages.${id}`, NativeEncoder.A2U8([
                                     eventList.get("message"),
                                     msg.author,
-                                    msg.room,
+                                    msg.channel,
                                     msg.id,
                                     msg.timestamp - globalTimeStart,
                                     msg.attachments.replace(/[\[\]]/g, ""),
@@ -672,7 +692,7 @@ api = {
 
                         // Todo: Implement memory caching
 
-                        let query = (req.getQuery("id") && typeof +req.getQuery("id") == "number")? [`select id, text, attachments, mentions, author, timestamp, edited, reply, type from \`chat.messages\` where room=? and deleted = false and id =?`, [id, (+req.getQuery("id")) || 0]] : [`select id, text, attachments, mentions, author, timestamp, edited, type, reply, room from \`chat.messages\` where room=? and deleted = false order by id desc limit ${(+req.getQuery("limit")) || 10} offset ${(+req.getQuery("offset")) || 0}`, [id]];
+                        let query = (req.getQuery("id") && typeof +req.getQuery("id") == "number")? [`select id, text, attachments, mentions, author, timestamp, edited, reply, type from \`chat.messages\` where channel=? and deleted = false and id =?`, [id, (+req.getQuery("id")) || 0]] : [`select id, text, attachments, mentions, author, timestamp, edited, type, reply, channel from \`chat.messages\` where channel=? and deleted = false order by id desc limit ${(+req.getQuery("limit")) || 10} offset ${(+req.getQuery("offset")) || 0}`, [id]];
                         
                         response = await mazeDatabase.query(...query)
                         
@@ -723,6 +743,86 @@ api = {
                 }
             break;
 
+            case "servers":
+                if(User.error) return error(13);
+                id = shift();
+
+                switch(shift()){
+                    case "create":
+                        if(User.error) return error(13);
+
+                        req.parseBody(async (data, fail) => {
+                            if(fail){
+                                return error(fail)
+                            }
+        
+                            data = data.json;
+        
+                            if(typeof data !== "object" || !data.name){
+                                return error(2)
+                            }
+        
+                            // if(typeof data.location == "string") data.location = ["channel", "dm", "server", "group"].indexOf(data.location);
+                            // if(typeof data.type == "string") data.type = ["text", "announcement", "voice"].indexOf(data.type);
+        
+                            response = await mazeDatabase.table("chat.servers").insert({
+                                owner: User.id,
+                                displayname: data.name,
+                                icon: data.icon || "",
+                                // banner: data.banner || "",
+                                isPublic: data.isPublic ? 1 : 0
+                            })
+            
+                            if(!response.err){
+                                api.util.join(User.id, {
+                                    type: "server",
+                                    id: response.result.insertId,
+                                    owner: true
+                                })
+        
+                                res.send("" + response.result.insertId)
+                            } else {
+                                return error(24)
+                            }
+                        }).data()
+                    break;
+
+                    case "join":
+                        if(User.error) return error(13);
+
+                        // TO-DO: re-add POST for more join options
+
+                        res.send(JSON.stringify(await api.util.join(User.id, {
+                            type: "server",
+                            id: +id
+                        })))
+                    break;
+
+                    default:
+                        if(!id){
+                            return error(2)
+                        }
+
+                        let servers = await api.util.getServers(id.split(",")), result = [];
+
+                        if(!servers || servers.err) return error(24), console.log(servers.err);
+
+                        for(let server of servers){
+                            if(!server) continue;
+
+                            let members = await api.util.getMemberships(null, server.id)
+
+                            if(members && !members.err){
+                                server.members = members;
+                            } else console.error(members.err);
+
+                            result.push(server);
+                        }
+                        
+                        return res.send(JSON.stringify(result))
+                }
+            break;
+
             default:
                 error(1)
         }
@@ -730,30 +830,8 @@ api = {
 
     HandleSocket: {
         open(ws){
-            clients[ws.uuid] = ws;
-
             ws.alive = true;
             ws.authorized = false;
-
-            // iduno man this might be removed soon
-            clients[ws.uuid] = ws;
-
-            ws.alive = true;
-            ws.authorized = false;
-
-            // ws.listeners = {
-            //     message: []
-            // }
-
-            // ws.queue = []
-
-            ws.write = (data) => {
-                // ws.queue.push(data)
-
-                if(ws.alive){
-                    ws.send(NativeEncoder.A2U8(data), true, true);
-                }
-            }
 
             // ws.queueInterval = setInterval(function sendQueue(){
             //     if(ws.alive && ws.queue.length > 0){
@@ -762,6 +840,7 @@ api = {
             //     }
             // }, 100)
 
+            // FIXME: Potential deprecation
             ws.forget = (close = true) => {
                 try {
                     if(!ws.alive) return;
@@ -769,10 +848,10 @@ api = {
                     if(close) ws.close()
                     ws.alive = false;
                     // clearInterval(ws.queueInterval);
-                    delete clients[ws.uuid];
                 } catch {}
             }
 
+            // Kick the client if they did not authorize within 4 seconds
             setTimeout(()=>{
                 if(!ws.authorized) {
                     ws.forget()
@@ -783,11 +862,12 @@ api = {
         message(ws, message, isBinary){
             for(let data of NativeEncoder.U82A(new Uint8Array(message))){
 
+                // If unauthorized, the client must not perform any other actions
                 if(!ws.authorized && data[0] !== "authorize") continue;
 
                 switch(data[0]){
                     case "heartbeat":
-                        // Heartbeat
+                        // Heartbeat ("ping")
                         ws.alive = true;
                         ws.send(new Uint8Array([0]), true, true);
                     continue;
@@ -806,21 +886,27 @@ api = {
                             if(!cache.numConnections[user.id]) cache.numConnections[user.id] = 0;
                             cache.numConnections[user.id]++;
 
+                            // The user is now online
                             api.util.updatePresence(user.id, 1)
 
                             ws.subscribe("maze.user." + user.id)
 
+                            // In case the user reconnected from an older client, notify the user of the current client version (to potentially update)
                             ws.send(NativeEncoder.A2U8([
                                 eventList.get("versionCheck"),
                                 lowest_client,
                                 latest_client
                             ]), true, true)
+
+                            // Note that all clients MUST respond to "lowest_client", as that is considered the lowest compatible version. If the client is older, it must NOT use the API anymore.
                         }
                     break;
 
+                    // Sending messages through websockets is not implemented and should NOT be implemented, at least at this state, due to error checking
                     case "message": break;
 
                     case "typing":
+                        // TODO: Check if the user is a member of the channel to avoid fake typing
                         backend.broadcast(`maze.messages.${data[1]}`, NativeEncoder.A2U8([eventList.get("typing"), data[1], ws.user.id]), true)
                     break;
 

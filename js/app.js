@@ -65,7 +65,7 @@ M.on("load", async ()=>{
                 // Fake placeholder:
                 app.awaitingMessage = await app.messageElement({
                     author: app.client.user.id,
-                    room: app.activeChat.id,
+                    channel: app.activeChat.id,
                     id: null,
                     timestamp: Date.now(),
                     text: content,
@@ -589,7 +589,7 @@ M.on("load", async ()=>{
                             chat.listItemRenderer.class("unread")
                         }
 
-                        app.pushNotification("Message in #" + msg.room, {
+                        app.pushNotification("Message in #" + msg.channel, {
                             body: msg.text,
                             icon: "https://cdn.extragon.cloud/file/" + (profile.avatar || "826ddb1ccc499d49186262e4c8d6b53e.svg") + (!profile.avatar || profile.avatar.endsWith("svg")? "" : "?size=32")
                         })
@@ -651,7 +651,7 @@ M.on("load", async ()=>{
                 break;
             }
 
-            let channel = app.client.chats[messageBuffer.room];
+            let channel = app.client.chats[messageBuffer.channel];
 
             let element = N({
                 class: "maze-message " + (messageBuffer.author == app.client.user.id? "own" : "not-own") + (profile.nsfw? " nsfw": "") + (messageBuffer.sent? " sent-message-waiting" : "") + (messageBuffer.reply? " message-reply" : ""),
@@ -673,7 +673,7 @@ M.on("load", async ()=>{
 
                         N({inner: [
                             app.getAvatar(profile)
-                        ], class: "maze-message-avatar", attr: {"load": "solid"}, onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
+                        ], class: "maze-message-avatar", onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
     
                         N({inner: [
                             N({innerText: profile.displayname, class: "maze-message-username", onclick(){ app.showProfile(messageBuffer.author, this.getBoundingClientRect().right + 15) }}),
@@ -725,7 +725,7 @@ M.on("load", async ()=>{
 
             if(messageBuffer.id){
                 element.messageID = messageBuffer.id;
-                (await app.client.chat(messageBuffer.room)).messageBuffer[messageBuffer.id].renderBuffer = element
+                (await app.client.chat(messageBuffer.channel)).messageBuffer[messageBuffer.id].renderBuffer = element
             }
 
             return element
@@ -766,7 +766,7 @@ M.on("load", async ()=>{
             ])
         },
 
-        getAvatar(profile, size = 80, badge = false){
+        getAvatar(profile, size = 64, badge = false){
             if(typeof profile === "string") profile = {avatar: profile}
 
             let element = N({
@@ -870,25 +870,33 @@ M.on("load", async ()=>{
             for(let membership of memberships){
                 if(!membership.isMember) continue;
 
-                let channel = await app.client.chat(membership.room);
-                
-                console.log(channel.info.unread);
+                if(membership.channel){
+                    let channel = await app.client.chat(membership.channel);
+                    
+                    console.log(channel.info.unread);
+    
+                    channel.listItemRenderer = N({
+                        class: "list-item channel" + (channel.info.unread? " unread": ""),
+                        inner: [
+                            N("i", {class: "bi-hash"}),
+                            N("span", {
+                                innerText: channel.info.name
+                            })
+                        ],
+    
+                        onclick(){
+                            app.ui.openChat(membership.channel)
+                        }
+                    })
+    
+                    O("#publicChannelList").add(channel.listItemRenderer)
+                } else if(membership.server){
 
-                channel.listItemRenderer = N({
-                    class: "list-item channel" + (channel.info.unread? " unread": ""),
-                    inner: [
-                        N("i", {class: "bi-hash"}),
-                        N("span", {
-                            innerText: channel.info.name
-                        })
-                    ],
+                    O("#myServerList").add(N({
+                        class: "serverIcon"
+                    }))
+                }
 
-                    onclick(){
-                        app.ui.openChat(membership.room)
-                    }
-                })
-
-                O("#list .list-items").add(channel.listItemRenderer)
             }
         }
     }
@@ -987,7 +995,7 @@ M.on("load", async ()=>{
 
         let croppers = {};
 
-        async function imageCropModal(source, key, preview, viewport, circle){
+        async function imageCropModal(input, source, key, preview, viewport, circle){
             if(!source) return;
 
             O("#cropModal .cropperContainer").hide()
@@ -1019,6 +1027,8 @@ M.on("load", async ()=>{
             croppers[key].element.show()
 
             let sourceURL = URL.createObjectURL(source);
+
+            if(input) input.value = null;
 
             setTimeout(() => {
                 O("#cropModal .cropperContainer").show()
@@ -1070,11 +1080,11 @@ M.on("load", async ()=>{
         }
 
         O("#profileEditorAvatar").on("input", event => {
-            imageCropModal(event.target.files[0], "avatar", ".profile-avatar :is(img,video)", { width: 256, height: 256 }, true)
+            imageCropModal(event.target, event.target.files[0], "avatar", ".profile-avatar :is(img,video)", { width: 256, height: 256 }, true)
         });
 
         O("#profileEditorBanner").on("input", event => {
-            imageCropModal(event.target.files[0], "banner", ".profile-banner :is(img,video)", { width: 310, height: 160 })
+            imageCropModal(event.target, event.target.files[0], "banner", ".profile-banner :is(img,video)", { width: 310, height: 160 })
         });
 
         // Load more messages when scrolling
@@ -1140,8 +1150,6 @@ M.on("load", async ()=>{
 
 
         // Keyboard controls
-
-        let keyStack;
 
         M.on("keyup", event => {
             switch(event.key){

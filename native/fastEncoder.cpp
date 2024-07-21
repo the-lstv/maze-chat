@@ -110,11 +110,12 @@ Napi::Value A2U8(const Napi::CallbackInfo& info) {
         if (i != info.Length() && info[i].As<Napi::Array>().Length() > 0) result.push_back(0);
     }
 
-    // Napi::ArrayBuffer arrayBuffer = Napi::ArrayBuffer::New(env, result.size());
-    // uint8_t* data = static_cast<uint8_t*>(arrayBuffer.Data());
-    // std::copy(result.begin(), result.end(), data);
+    Napi::ArrayBuffer arrayBuffer = Napi::ArrayBuffer::New(env, result.size());
+    uint8_t* data = static_cast<uint8_t*>(arrayBuffer.Data());
+    std::copy(result.begin(), result.end(), data);
+
     // return Napi::Uint8Array::New(env, result.size(), arrayBuffer, 0, napi_uint8_array);
-    return Napi::ArrayBuffer::New(env, result.size());
+    return arrayBuffer;
 }
 
 Napi::Value U82A(const Napi::CallbackInfo& info) {

@@ -179,14 +179,6 @@
         return result;
     }
 
-    window.U82A = U82A;
-    window.A2U8 = A2U8;
-
-    let bytes = {
-        event: 1,
-        message: 0
-    }
-
     function chatClass(parent, id, chat){
         return new ((_this => class chatClass {
             constructor(){
@@ -337,7 +329,7 @@
                             }
 
                             _this.messageBuffer[message.id] = message;
-                            message.room = _this.id;
+                            message.channel = _this.id;
                             message.renderBuffer = null;
                         }
 
@@ -370,6 +362,8 @@
 
                 this.profileCache = {};
 
+                this.serverCache = {};
+
                 this.lastHeartbeatStarted = this.lastHeartbeat = Date.now()
 
                 if(!(window.LS? LS.EventResolver : false) && !options.EventResolver){
@@ -396,7 +390,7 @@
                                 if(this.chats[event[2]]) {
                                     let buffer = {
                                         author: event[1],
-                                        room: event[2],
+                                        channel: event[2],
                                         id: event[3],
                                         timestamp: event[4] + globalTimeStart,
                                         attachments: event[5],
@@ -550,6 +544,14 @@
                 this.options = options;
             }
 
+            get ArrayEncoder(){
+                return A2U8
+            }
+
+            get ArrayDecoder(){
+                return U82A
+            }
+
             async login(token, callback = data => data, preloadChannels = true){
                 _this.user.token = token
                 let conn = await _this.request("?profile=true" + (preloadChannels? "&channels=true": "")).json();
@@ -565,8 +567,8 @@
                         _this.profileCache[conn.user_fragment.id] = _this._cleanProfile(conn.user_profile);
                     }
 
-                    if(conn.user_channels){
-                        _this.initialMembershipCache = conn.user_channels
+                    if(conn.user_memberships){
+                        _this.initialMembershipCache = conn.user_memberships
                     }
 
                     if(_this.checkVersion(conn.lowest_client) == -1){
@@ -611,6 +613,40 @@
             }
 
             async prefetchProfiles(list = []){
+                if(list.length < 1) return [];
+
+                list = list.map(id => +id).filter(_ => typeof id !== "number" && !isNaN(_));
+
+                let missingList = list.filter(id => !_this.profileCache[id]), result = [];
+
+                if(missingList.length > 0){
+                    let data = await _this.request("/user/profile/" + missingList.join(",")).json();
+
+                    if(!Array.isArray(data)) throw "Failed fetching profiles " + missingList.join(", ");
+                    
+                    for(let profile of data){
+                        if(typeof profile !== "object" || profile.created === false){
+                            result.push(profile)
+
+                            if(profile.created === false){
+                                console.log(profile.user, profile.id);
+                                if(profile.user) profile.id = profile.user;
+                            } else continue;
+                        }
+        
+                        _this.profileCache[profile.id] = _this._cleanProfile(profile)
+                    }
+
+                }
+
+                for(let user of list){
+                    if(_this.profileCache[user]) result.push(_this.profileCache[user] || null)
+                }
+    
+                return result
+            }
+
+            async prefetchServers(list = []){
                 if(list.length < 1) return [];
 
                 list = list.map(id => +id).filter(_ => typeof id !== "number" && !isNaN(_));
@@ -812,7 +848,7 @@
             }
 
             async getAllChats(){
-                return await app.client.getChats((await app.client.listChannels()).map(channel => channel.room))
+                return await app.client.getChats((await app.client.listChannels()).map(channel => channel.channel))
             }
 
             async listChannels(){

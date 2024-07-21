@@ -961,8 +961,9 @@ pre {
     content: "";
     position: absolute;
     border-radius: 50px;
-    box-shadow: 0 0 0 3px inset var(--color);
     animation: l4 2.5s infinite;
+    outline: 3px solid var(--color);
+    transform: scale(0.8);
 }
 
 .messageLoader:after {
