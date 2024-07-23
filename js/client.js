@@ -246,7 +246,7 @@
             }
 
             traverseLocal(from, limit, callback){
-                let keys = Object.keys(_this.messageBuffer).reverse();
+                let keys = Object.keys(_this.messageBuffer).map(key => +key).sort();
 
                 for(let i = from; i < limit + from; i++){
                     if(i > keys.length - 1) break;
@@ -317,10 +317,19 @@
 
             get(limit, offset = 0){
                 return new Promise(async resolve => {
-                    let query = await _this.parent.request(`/channels/${_this.id}/read/?limit=${(+limit) || 10}&offset=${(+offset) || 0}`).send();
 
-                    if(query.ok){
-                        let messages = await query.json();
+                    let messages, keys = Object.keys(_this.messageBuffer).map(key => +key).sort(), sliced = keys.slice(offset, offset + limit);
+
+                    if(sliced.length === 0){
+                        let query = await _this.parent.request(`/channels/${_this.id}/read/?limit=${(+limit) || 10}&offset=${(+offset) || 0}`).send();
+
+                        if(!query.ok){
+                            return resolve({
+                                error: query.error
+                            })
+                        }
+
+                        messages = await query.json()
 
                         for(let message of messages){
                             if(_this.messageBuffer[message.id]){
@@ -333,11 +342,9 @@
                             message.renderBuffer = null;
                         }
 
-                        resolve(messages)
+                        return resolve(messages.map(message => message.id).sort())
                     } else {
-                        resolve({
-                            error: query.error
-                        })
+                        return resolve(sliced)
                     }
                 })
             }
@@ -350,8 +357,11 @@
 
                 options = LS.Util.defaults({
                     heartbeatInterval: 8000,
-                    heartbeatTimeout: 650, // Max time of not responding before the connection should be considered offline
+                    heartbeatTimeout: 650, // Max time of not responding before the connection should be considered offline,
+                    requestProtocol: "http"
                 }, options)
+
+                this.qBlazeConnection = window.qBlaze? qBlaze.connection(gateway): null;
 
                 _this = this;
 
@@ -444,9 +454,9 @@
                                         edited: true
                                     };
 
-                                    this.chats[event[1]].invoke("edit", buffer);
-                                    
                                     if(this.chats[event[1]].messageBuffer[event[2]]) Object.assign(this.chats[event[1]].messageBuffer[event[2]], buffer)
+
+                                    this.chats[event[1]].invoke("edit", buffer);
                                 }
                             break;
 
@@ -593,13 +603,30 @@
                 let url = _this.api + endpoint;
                 
                 async function execute(){
-                    return await fetch(url, {
-                        ...options,
-                        headers: {
-                            Authorization: _this.user.token,
-                            ... options.headers? options.headers : {}
-                        }
-                    })
+
+                    switch(_this.options.requestProtocol){
+                        case "http":
+                            return await fetch(url, {
+                                ...options,
+                                headers: {
+                                    authorization: _this.user.token,
+                                    ... options.headers? options.headers : {}
+                                }
+                            })
+
+                        case "qblaze":
+                            // Set authorization
+                            if(!_this.qBlazeConnection.globalHeaders.authorization){
+                                await _this.qBlazeConnection.setGlobalHeaders({
+                                    authorization: _this.user.token
+                                })
+                            }
+
+                            return await qBlaze.fetch(url, {
+                                ...options
+                            }, _this.qBlazeConnection)
+                    }
+                    
                 }
 
                 return {

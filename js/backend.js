@@ -263,7 +263,7 @@ api = {
                             if(results.length){
                                 response = await mazeDatabase.table("chat.channels.members").update(`where ${options.type == "server"? "server": "channel"}=${+options.id} and member=${+user}`, membership)
                             } else {
-                                membership.memberSince = Date.now() / 1000
+                                membership.memberSince = Math.floor(Date.now() / 1000)
                                 response = await mazeDatabase.table("chat.channels.members").insert(membership);
                             }
                             
@@ -294,7 +294,7 @@ api = {
                                 //     attachments: "[]",
                                 //     author: user,
                                 //     channel: data.channel,
-                                //     timestamp: Date.now() / 1000,
+                                //     timestamp: Math.floor(Date.now() / 1000),
                                 //     type: 2
                                 // })
 
@@ -391,7 +391,7 @@ api = {
                             let thing = await mazeDatabase.table("chat.profiles").insert({
                                 displayname: initialData.displayname || initialData.name,
                                 ... initialData.pfp? {avatar: initialData.avatar} : {},
-                                created: Date.now() / 1000,
+                                created: Math.floor(Date.now() / 1000),
                                 link: User.id
                             })
 
@@ -409,7 +409,9 @@ api = {
                                 return error(fail)
                             }
 
+
                             data = data.json;
+
 
                             if(typeof data !== "object"){
                                 return error(2)
@@ -544,7 +546,7 @@ api = {
                                 attachments: data.attachments || "[]",
                                 author: User.id,
                                 channel: id,
-                                timestamp: Date.now() / 1000,
+                                timestamp: Math.floor(Date.now() / 1000),
                                 type: 0,
                                 ...data.reply? {reply: data.reply}: {}
                             }

@@ -357,7 +357,7 @@ main {
     width: 100%;
     border-radius: 24px;
     overflow: hidden;
-    background: var(--ui);
+    background: var(--elevate-1);
     min-height: calc(1em + var(--messageBox-height));
     padding: 0 2px;
     flex-direction: column;
@@ -549,7 +549,7 @@ main {
     width: 320px;
 	min-height: 340px;
     max-height: 480px;
-    background: var(--ui);
+    background: var(--elevate-1);
     border-radius: 18px;
     outline: .1em solid var(--elevate-1);
     box-shadow: 0 .25em 2em 0 #0004;
@@ -564,7 +564,7 @@ main {
     overflow: visible;
     z-index: 0;
     position: relative;
-	background: var(--custom-color-0, --elevate-0);
+	background: var(--custom-color-0, --elevate-1);
 	-webkit-mask: radial-gradient(circle at calc(100% - 17%) calc(100% - 16%), transparent 22%, #fff 22%);
     mask: radial-gradient(circle at calc(50%) calc(100% - 34%), transparent 38%, #fff 22%);
 }
@@ -576,7 +576,7 @@ main {
     left: 0;
     right: 0;
     height: 90px;
-    background: linear-gradient(0, var(--ui) 10px, transparent);
+    background: linear-gradient(0, var(--elevate-1) 10px, transparent);
 }
 
 .profile-banner :is(video, img) {
@@ -613,7 +613,7 @@ main {
 	margin: 1em;
     margin-top: 1.8em;
     z-index: 5;
-    padding-bottom: 10px;
+    padding-bottom: 16px;
 }
 
 .profileInner {
@@ -752,7 +752,7 @@ pre {
 }
 
 [ls-theme="light"] #messageBox, [ls-theme="light"] #profileBar {
-    background: var(--elevate-0);
+    background: var(--elevate-1);
 }
 
 [ls-theme="light"] .profileContent {
@@ -830,7 +830,7 @@ pre {
 .serverIcon {
     width: 50px;
     height: 50px;
-    background-color: var(--elevate-0);
+    background-color: var(--elevate-1);
     /* overflow: hidden; */
     cursor: pointer;
     display: flex;
@@ -1114,7 +1114,7 @@ button .loader {
     padding: 4px;
     background: var(--ui-bg-1);
     border-radius: 8px;
-    outline: 1px solid var(--elevate-0);
+    outline: 1px solid var(--elevate-1);
     box-shadow: 0 6px 18px -5px #000a;
     cursor: pointer;
 }
@@ -1125,7 +1125,7 @@ button .loader {
 }
 
 .messageButton:hover {
-    background: var(--elevate-0);
+    background: var(--elevate-1);
 }
 
 .messageButton:active {
@@ -1352,7 +1352,7 @@ input[type=color]::-moz-color-swatch {
     left: 20%;
     right: 20%;
     z-index: 5;
-    background: var(--elevate-0);
+    background: var(--elevate-1);
     border-radius: 10px;
     outline: 1px solid var(--elevate-1);
     box-shadow: 0 4px 12px 0 #0003;

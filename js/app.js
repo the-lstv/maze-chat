@@ -207,8 +207,13 @@ M.on("load", async ()=>{
 
                 if(data.length < app.options.messageSampleSize) app.messageOffsetMax = app.messageOffset + app.options.messageSampleSize;
 
-                for(let message of data){
-                    let element = app.activeChat.messageBuffer[message.id].renderBuffer || await app.messageElement(message);
+                if(!data){
+                    LS.Toast.show("Failed loading messages", {accent: "red"})
+                } else for(let message of data){
+
+                    message = app.activeChat.messageBuffer[message];
+
+                    let element = message.renderBuffer || await app.messageElement(message);
 
                     if(app.ui.messageContainer.children.length > 0){
                         app.ui.messageContainer.children[0].addBefore(element)
@@ -303,6 +308,8 @@ M.on("load", async ()=>{
             },
 
             timeFormat(timestamp, includeDate){
+                timestamp = timestamp * 1000;
+
                 const options = {
                     ...includeDate? {
                         year: 'numeric',
@@ -321,7 +328,7 @@ M.on("load", async ()=>{
                 app.activeChat.traverseLocal(from, limit, (thisBuffer, i, nextBuffer) => {
                     if(!thisBuffer) return;
 
-                    let condense = !!nextBuffer && !nextBuffer.reply && !thisBuffer.reply && nextBuffer.type == 0 && nextBuffer.author === thisBuffer.author && (thisBuffer.timestamp - nextBuffer.timestamp) < 300000;
+                    let condense = !!nextBuffer && !nextBuffer.reply && !thisBuffer.reply && nextBuffer.type == 0 && nextBuffer.author === thisBuffer.author && (thisBuffer.timestamp - nextBuffer.timestamp) < 300;
                     if(thisBuffer.renderBuffer) thisBuffer.renderBuffer.class("condensed", condense)
                 })
             },
@@ -597,8 +604,6 @@ M.on("load", async ()=>{
                 })
 
                 chat.on("edit", (buffer) => {
-                    if(!app.activeChat || app.activeChat.id !== chat.id) return;
-
                     let element = chat.messageBuffer[buffer.id].renderBuffer;
 
                     if(element){
@@ -817,7 +822,7 @@ M.on("load", async ()=>{
 
             app.showBanner(profile.banner)
 
-            for(let i = 0; i < 3; i++) container.style.setProperty("--custom-color-" + i, profile.colors[i] || "var(--ui)");
+            for(let i = 0; i < 3; i++) container.style.setProperty("--custom-color-" + i, profile.colors[i] || "var(--elevate-2)");
 
             O("#profilePopup").class("color", !!profile.colors[1] || !!profile.colors[2])
 
@@ -1049,7 +1054,9 @@ M.on("load", async ()=>{
 
                     URL.revokeObjectURL(sourceURL);
 
-                    croppers[key].result('blob', 'viewport', 'webp', .6, false).then(function(blob) {
+                    console.log(viewport.result || 'viewport');
+
+                    croppers[key].result('blob', viewport.result || 'viewport', 'webp', .95, false).then(function(blob) {
                         const image = new Image();
                         image.onload = () => {
 
@@ -1084,7 +1091,7 @@ M.on("load", async ()=>{
         });
 
         O("#profileEditorBanner").on("input", event => {
-            imageCropModal(event.target, event.target.files[0], "banner", ".profile-banner :is(img,video)", { width: 310, height: 160 })
+            imageCropModal(event.target, event.target.files[0], "banner", ".profile-banner :is(img,video)", { width: 310, height: 160, result: { width: 620, height: 320 } })
         });
 
         // Load more messages when scrolling
