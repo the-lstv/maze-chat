@@ -266,7 +266,7 @@ api = {
                                 membership.memberSince = Math.floor(Date.now() / 1000)
                                 response = await mazeDatabase.table("chat.channels.members").insert(membership);
                             }
-                            
+
                             if(!response.err){
                                 if(membership.isBanned) return resolve({error: "User is banned"});
 

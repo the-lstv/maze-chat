@@ -210,10 +210,10 @@
             <div %list>
                 <div %channelOrganizer>
                     <div %serverList ls-accent="auto">
-                        <div .serverIcon>
+                        <div .serverIcon .directMessageListButton onclick="app.channelTabSwitcher.setActive('directMessageList')">
                             <i .bi-house-fill></i>
                         </div>
-                        <div .selected ls-tooltip="Public channels" .serverIcon>
+                        <div .selected ls-tooltip="Public channels" .serverIcon .publicChannelListButton onclick="app.channelTabSwitcher.setActive('publicChannelList')">
                             <i .bi-list-task></i>
                         </div>
                         <hr>

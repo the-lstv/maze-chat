@@ -108,6 +108,8 @@ LS.once("app.ready", async function(app) {
             app.ui.editingMessageStopEdit()
         }
     }})
+
+    app.renderInitialMembershipList()
 })
 
 // let element = O(messageContent), textInput = O(hiddenTextarea);

@@ -709,6 +709,7 @@ main {
     padding: .4em .6em;
     border-radius: .5em;
     border: .016em solid var(--ui-border);
+    margin: 8px 0;
     margin-right: 130px;
     min-width: 80%;
     font-family: "JetBrains Mono";
@@ -840,6 +841,10 @@ pre {
     transition: .2s;
     position: relative;
     color: var(--accent-light);
+}
+
+.serverIcon:active {
+    transform: translateY(2px);
 }
 
 .serverIcon > i {

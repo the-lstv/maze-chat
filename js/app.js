@@ -103,6 +103,31 @@ M.on("load", async ()=>{
                 }, 50)
             },
 
+            setUrl(path, title = ""){
+                history.pushState({ path }, title, path)
+            },
+
+            followUrl(url, options = {}){
+                console.log("Following URL", url);
+
+                url = url.split("/").filter(_ => _);
+
+                switch(url[0]){
+                    case "channels": case "channel":
+                        if(url[1] && !isNaN(+url[1])) {
+                            let id = +url[1];
+
+                            app.ui.openChat(id)
+                        }
+                    break;
+
+                    default:
+                        app.channelContent.setActive("noChannel");
+                        Q(".channel.selected").all().class("selected", false)
+                    break;
+                }
+            },
+
             async openChat(id){
                 app.channelContent.setActive("room")
                 app.ui.editingMessageStopEdit() // Todo: Save progress state
@@ -121,19 +146,14 @@ M.on("load", async ()=>{
 
                 app.ui.mesageDisplayContainer.style.display = "none";
 
-                let chat = await app.client.chat(id)
+                let chat = await app.client.getChannel(id)
 
-                // Pre-fetch all profiles that are a part of the chat
-                await app.client.prefetchProfiles(chat.info.members.map(member => member.member))
-
-                app.messageOffset = 0;
-                app.messageScrollOffset = 0
-
-                app.messageOffsetMax = Infinity;
+                // Pre-fetch profiles that are a part of the chat
+                await app.client.prefetchProfiles((await chat.getMembers()).map(member => member.member))
 
                 if(chat.error){
                     let message = chat.error;
-
+                    
                     switch(chat.code){
                         case 13:
                             message = "Please log-in to view this chat."
@@ -143,6 +163,14 @@ M.on("load", async ()=>{
                     alert(message)
                     return
                 }
+
+
+                app.messageOffset = 0;
+                app.messageScrollOffset = 0
+
+                app.messageOffsetMax = Infinity;
+
+                app.ui.setUrl("/channels/" + id)
 
                 Q(".channelName").all().set(chat.info.name.replaceAll(" ", "-"))
 
@@ -166,7 +194,7 @@ M.on("load", async ()=>{
             async renderMembers(){
                 app.ui.memberList.get(".list-items").clear();
 
-                for(let member of app.activeChat.info.members){
+                for(let member of await app.activeChat.getMembers()){
                     let profile = await app.client.profile(member.member);
 
                     app.ui.memberList.get(".list-items").add(N({
@@ -259,6 +287,22 @@ M.on("load", async ()=>{
                     top: (app.ui.activeMessageElement.getBoundingClientRect().top - 30) + "px",
                     display: "flex"
                 })
+            },
+
+            channelListItemElement(channel){
+                return channel.listItemRenderer || (channel.listItemRenderer = N({
+                    class: "list-item channel" + (channel.info.unread? " unread": ""),
+                    inner: [
+                        N("i", {class: "bi-hash"}),
+                        N("span", {
+                            innerText: channel.info.name
+                        })
+                    ],
+
+                    onclick(){
+                        app.ui.openChat(channel.id)
+                    }
+                }))
             },
 
             activeMessageEdit(){
@@ -408,6 +452,14 @@ M.on("load", async ()=>{
         get activeChat(){
             return app.client.chats[app.activeChatID]
         },
+
+        activeServerID: null,
+
+        get activeServer(){
+            return app.client.serverCache[app.activeServerID]
+        },
+
+        activeTab: null,
 
         _replyingMessage: null,
 
@@ -730,7 +782,7 @@ M.on("load", async ()=>{
 
             if(messageBuffer.id){
                 element.messageID = messageBuffer.id;
-                (await app.client.chat(messageBuffer.channel)).messageBuffer[messageBuffer.id].renderBuffer = element
+                (await app.client.getChannel(messageBuffer.channel)).messageBuffer[messageBuffer.id].renderBuffer = element
             }
 
             return element
@@ -866,43 +918,50 @@ M.on("load", async ()=>{
             }, 800)
         },
 
-        async temporary_renderPubliChannels(){
+        async renderInitialMembershipList(){
             O("#list .list-items").clear();
 
-            let memberships = app.client.initialChannelCache || await app.client.listChannels();
-            app.client.initialChannelCache = null;
+            let memberships = await app.client.getMemberships();
 
-            for(let membership of memberships){
+            let [channelMemberships, serverMemberships] = [memberships.filter(membership => membership.channel !== null), memberships.filter(membership => membership.server !== null)];
+
+            // Prefetch data about servers
+            let servers = await app.client.prefetchServers(serverMemberships.map(membership => membership.server))
+
+            let allChannels = [servers.map(server => server.channels), channelMemberships.map(membership => membership.channel)].flat(2);
+
+            let channels = await app.client.prefetchChannels(allChannels)
+
+            for(let channel of channels) app.handleChannelEvents(channel);
+
+            for(let membership of channelMemberships){
                 if(!membership.isMember) continue;
 
-                if(membership.channel){
-                    let channel = await app.client.chat(membership.channel);
-                    
-                    console.log(channel.info.unread);
-    
-                    channel.listItemRenderer = N({
-                        class: "list-item channel" + (channel.info.unread? " unread": ""),
-                        inner: [
-                            N("i", {class: "bi-hash"}),
-                            N("span", {
-                                innerText: channel.info.name
-                            })
-                        ],
-    
-                        onclick(){
-                            app.ui.openChat(membership.channel)
-                        }
-                    })
-    
-                    O("#publicChannelList").add(channel.listItemRenderer)
-                } else if(membership.server){
+                let channel = await app.client.getChannel(membership.channel);
 
-                    O("#myServerList").add(N({
-                        class: "serverIcon"
-                    }))
-                }
-
+                O("#publicChannelList").add(app.ui.channelListItemElement(channel))
             }
+
+            for(let membership of serverMemberships){
+                if(!membership.isMember) continue;
+
+                let server = await app.client.getServer(membership.server);
+
+                server.listItemRenderer = N({
+                    class: "serverIcon",
+                    tooltip: server.displayname,
+
+                    onclick(){
+                        app.activeServerID = server.id;
+                        app.channelTabSwitcher.setActive("serverChannelList")
+                    }
+                });
+
+                O("#myServerList").add(server.listItemRenderer)
+            }
+
+            app.ui.followUrl(location.pathname, {initial: true})
+            app.screen.setActive("home")
         }
     }
 
@@ -921,14 +980,6 @@ M.on("load", async ()=>{
             tabs.setActive(login.error == "outdated" ? 'outdated': 'login');
             return
         }
-
-        let channels = await app.client.getAllChats()
-
-        for(let channel of channels) app.handleChannelEvents(channel);
-
-        // let error = await Mazec.initialize()
-
-        app.temporary_renderPubliChannels()
 
         // Set profile information
 
@@ -950,6 +1001,38 @@ M.on("load", async ()=>{
                 LS._topLayer.add(O("#profilePopup"))
             }
         })
+
+
+        // When tab switched:
+
+        app.channelTabSwitcher.on("tab_changed", async (id, name) => {
+            Q(".serverIcon").all().class("selected", false)
+            
+            if(name === "publicChannelList") {
+                app.activeTab = "public_channels";
+                O(".publicChannelListButton").class("selected")
+            }
+            
+            if(name === "directMessageList") {
+                app.activeTab = "direct_messages";
+                O(".directMessageListButton").class("selected")
+            }
+            
+            if(name === "serverChannelList") {
+                app.activeTab = "serevr";
+
+                O("#serverChannelList").getAll(".channel").all(element => element.remove())
+
+                if(app.activeServer.listItemRenderer) app.activeServer.listItemRenderer.class("selected");
+
+                let channels = await app.client.prefetchChannels(app.activeServer.channels);
+
+                for(let channel of channels){
+                    O("#serverChannelList").add(app.ui.channelListItemElement(channel))
+                }
+            }
+        })
+
 
         // This code is very dirty
 
@@ -1054,9 +1137,7 @@ M.on("load", async ()=>{
 
                     URL.revokeObjectURL(sourceURL);
 
-                    console.log(viewport.result || 'viewport');
-
-                    croppers[key].result('blob', viewport.result || 'viewport', 'webp', .95, false).then(function(blob) {
+                    croppers[key].result('blob', 'viewport', 'webp', .95, false).then(function(blob) {
                         const image = new Image();
                         image.onload = () => {
 
@@ -1091,7 +1172,7 @@ M.on("load", async ()=>{
         });
 
         O("#profileEditorBanner").on("input", event => {
-            imageCropModal(event.target, event.target.files[0], "banner", ".profile-banner :is(img,video)", { width: 310, height: 160, result: { width: 620, height: 320 } })
+            imageCropModal(event.target, event.target.files[0], "banner", ".profile-banner :is(img,video)", { width: 310, height: 160 })
         });
 
         // Load more messages when scrolling
@@ -1135,8 +1216,6 @@ M.on("load", async ()=>{
         })
 
         .on("presence", (user, status) => {
-            console.log(user, status);
-
             for(let badge of Q(`[user-id="${user}"] .profile-presence-badge`)){
                 badge.setAttribute("ls-accent", status === 0? "gray": "green")
             }
@@ -1181,12 +1260,13 @@ M.on("load", async ()=>{
             }
         })
 
-
-        app.screen.setActive("home")
-
         O("#messageButtons").on("click", () => O("#messageButtons").applyStyle({display: "none"}))
 
         LS.invoke("app.ready", app);
+
+        window.addEventListener('popstate', function (event) {    
+            app.ui.followUrl(event.state? event.state.path: "/", {browser: true});
+        });
     }
 
     LS.GlobalEvents.prepare({

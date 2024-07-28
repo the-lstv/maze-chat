@@ -232,6 +232,10 @@
                 _this.parent.internal_subscribe(false, `messages.${_this.id}`)
             }
 
+            async getMembers(){
+                return _this.info.server? (await _this.parent.getServer(_this.info.server)).members : _this.info.members
+            }
+
             sendTyping(){
                 if((Date.now() - _this.typingTimeout) < 9500) return;
 
@@ -318,7 +322,7 @@
             get(limit, offset = 0){
                 return new Promise(async resolve => {
 
-                    let messages, keys = Object.keys(_this.messageBuffer).map(key => +key).sort(), sliced = keys.slice(offset, offset + limit);
+                    let messages, keys = Object.keys(_this.messageBuffer).map(key => +key).sort().reverse(), sliced = keys.slice(offset, offset + limit);
 
                     if(sliced.length === 0){
                         let query = await _this.parent.request(`/channels/${_this.id}/read/?limit=${(+limit) || 10}&offset=${(+offset) || 0}`).send();
@@ -342,7 +346,7 @@
                             message.renderBuffer = null;
                         }
 
-                        return resolve(messages.map(message => message.id).sort())
+                        return resolve(messages.map(message => message.id).sort().reverse())
                     } else {
                         return resolve(sliced)
                     }
@@ -678,33 +682,73 @@
 
                 list = list.map(id => +id).filter(_ => typeof id !== "number" && !isNaN(_));
 
-                let missingList = list.filter(id => !_this.profileCache[id]), result = [];
+                let missingList = list.filter(id => !_this.serverCache[id]), result = [];
 
                 if(missingList.length > 0){
-                    let data = await _this.request("/user/profile/" + missingList.join(",")).json();
+                    let data = await _this.request("/servers/" + missingList.join(",")).json();
+
+                    if(!Array.isArray(data)) throw "Failed fetching server " + missingList.join(", ");
+                    
+                    for(let server of data){
+                        if(typeof server !== "object" || server.success === false){
+                            result.push(server)
+                            continue
+                        }
+
+                        _this.serverCache[server.id] = server
+                    }
+                }
+
+                for(let server of list){
+                    if(_this.serverCache[server]) result.push(_this.serverCache[server] || null)
+                }
+    
+                return result
+            }
+
+            async getServer(id){
+                return _this.serverCache[id] || (await _this.prefetchServers([id]))[0]
+            }
+
+            async prefetchChannels(list = []){
+                if(list.length < 1) return [];
+
+                list = list.map(id => +id).filter(_ => typeof id !== "number" && !isNaN(_));
+
+                let missingList = list.filter(id => !_this.chats[id]), result = [];
+
+                if(missingList.length > 0){
+                    let data = await _this.request("/channels/" + missingList.join(",")).json();
 
                     if(!Array.isArray(data)) throw "Failed fetching profiles " + missingList.join(", ");
-                    
-                    for(let profile of data){
-                        if(typeof profile !== "object" || profile.created === false){
-                            result.push(profile)
 
-                            if(profile.created === false){
-                                console.log(profile.user, profile.id);
-                                if(profile.user) profile.id = profile.user;
-                            } else continue;
+                    for(let chat of data){
+                        if(!chat || chat.error){
+                            result.push({
+                                error: chat.error || "Unknown error while loadin the chat",
+                                code: chat.code || -1
+                            })
+                            continue
                         }
-        
-                        _this.profileCache[profile.id] = _this._cleanProfile(profile)
+
+                        _this.chats[chat.id] = chatClass(_this, chat.id, chat);
                     }
 
                 }
 
-                for(let user of list){
-                    if(_this.profileCache[user]) result.push(_this.profileCache[user] || null)
+                for(let channel of list){
+                    if(_this.chats[channel]) result.push(_this.chats[channel] || null)
                 }
-    
+
                 return result
+            }
+
+            async getChannel(id){
+                return _this.chats[id] || (await _this.prefetchChannels([id]))[0]
+            }
+
+            async getAllChats(){
+                return await app.client.prefetchChannels((await app.client.getMemberships()).map(channel => channel.channel))
             }
 
             async profile(id = "me"){
@@ -837,48 +881,7 @@
                 }).json())
             }
 
-            async getChats(list){
-                if(list.length < 1) return [];
-
-                list = list.map(id => +id).filter(_ => typeof id !== "number" && !isNaN(_));
-
-                let missingList = list.filter(id => !_this.chats[id]), result = [];
-
-                if(missingList.length > 0){
-                    let data = await _this.request("/channels/" + missingList.join(",")).json();
-
-                    if(!Array.isArray(data)) throw "Failed fetching profiles " + missingList.join(", ");
-
-                    for(let chat of data){
-                        if(!chat || chat.error){
-                            result.push({
-                                error: chat.error || "Unknown error while loadin the chat",
-                                code: chat.code || -1
-                            })
-                            continue
-                        }
-
-                        _this.chats[chat.id] = chatClass(_this, chat.id, chat);
-                    }
-
-                }
-
-                for(let channel of list){
-                    if(_this.chats[channel]) result.push(_this.chats[channel] || null)
-                }
-
-                return result
-            }
-
-            async chat(id){
-                return (await _this.getChats([id]))[0]
-            }
-
-            async getAllChats(){
-                return await app.client.getChats((await app.client.listChannels()).map(channel => channel.channel))
-            }
-
-            async listChannels(){
+            async getMemberships(){
                 return _this.initialMembershipCache || await _this.request("/list").json()
             }
 
