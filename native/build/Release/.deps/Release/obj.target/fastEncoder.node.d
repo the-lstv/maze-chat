@@ -1,0 +1,1 @@
+cmd_Release/obj.target/fastEncoder.node := g++ -o Release/obj.target/fastEncoder.node -shared -pthread -rdynamic -m64  -Wl,-soname=fastEncoder.node -Wl,--start-group Release/obj.target/fastEncoder/fastEncoder.o -Wl,--end-group 

@@ -1,0 +1,1 @@
+cmd_Release/fastEncoder.node := ln -f "Release/obj.target/fastEncoder.node" "Release/fastEncoder.node" 2>/dev/null || (rm -rf "Release/fastEncoder.node" && cp -af "Release/obj.target/fastEncoder.node" "Release/fastEncoder.node")
