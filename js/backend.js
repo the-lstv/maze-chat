@@ -273,6 +273,7 @@ api = {
                                 if(!membership.bannedUntil) membership.bannedUntil = null;
 
                                 // Uh, this is some very terrible code
+                                // Yes XD
 
                                 await api.util.getMemberships(user)
                                 await api.util.getMemberships(null, options.type == "server"? options.id: null, options.type == "channel"? options.id: null)
@@ -355,7 +356,7 @@ api = {
                         `ws${req.domain.endsWith("test")? "": "s"}://${req.domain}/v2/mazec/`
                     ]
                 }))
-                // todo: implement fast_stringify, possibly change things around
+                // todo: implement fast_stringify, possibly change things around (no)
             break;
 
 
@@ -404,7 +405,7 @@ api = {
                     break;
 
                     case "patch":
-                        req.parseBody(async (data, fail) => {
+                        backend.helper.parseBody(req, res, async (data, fail) => {
                             if(fail){
                                 return error(fail)
                             }
@@ -470,7 +471,7 @@ api = {
                     case "create":
                         if(User.error) return error(13);
 
-                        req.parseBody(async (data, fail) => {
+                        backend.helper.parseBody(req, res, async (data, fail) => {
                             if(fail){
                                 return error(fail)
                             }
@@ -525,7 +526,7 @@ api = {
                         id = +id;
                         res.wait = true;
 
-                        req.parseBody(async (data, fail) => {
+                        backend.helper.parseBody(req, res, async (data, fail) => {
                             if(fail){
                                 return error(fail)
                             }
@@ -586,7 +587,7 @@ api = {
 
                         res.wait = true;
 
-                        req.parseBody(async (data, fail) => {
+                        backend.helper.parseBody(req, res, async (data, fail) => {
                             if(fail){
                                 return error(fail)
                             }
@@ -642,7 +643,7 @@ api = {
 
                         res.wait = true;
 
-                        req.parseBody(async (data, fail) => {
+                        backend.helper.parseBody(req, res, async (data, fail) => {
                             if(fail){
                                 return error(fail)
                             }
@@ -753,7 +754,7 @@ api = {
                     case "create":
                         if(User.error) return error(13);
 
-                        req.parseBody(async (data, fail) => {
+                        backend.helper.parseBody(req, res, async (data, fail) => {
                             if(fail){
                                 return error(fail)
                             }
